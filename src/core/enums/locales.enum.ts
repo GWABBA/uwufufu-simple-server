@@ -1,0 +1,29 @@
+export enum Locales {
+  AR = 'ar', // Arabic
+  DA = 'da', // Danish
+  DE = 'de', // German
+  EL = 'el', // Greek
+  EN = 'en', // English
+  ES = 'es', // Spanish
+  FI = 'fi', // Finnish
+  FIL = 'fil', // Filipino (ISO 639-2, not in 639-1, but widely used)
+  FR = 'fr', // French
+  HI = 'hi', // Hindi
+  HU = 'hu', // Hungarian
+  ID = 'id', // Indonesian
+  IT = 'it', // Italian
+  JA = 'ja', // Japanese
+  KO = 'ko', // Korean
+  MN = 'mn', // Mongolian
+  NL = 'nl', // Dutch
+  PL = 'pl', // Polish
+  PT_BR = 'pt-BR', // ✅ Brazilian Portuguese (BCP 47)
+  PT = 'pt', // Portuguese (European)
+  RU = 'ru', // Russian
+  SV = 'sv', // Swedish
+  TH = 'th', // Thai
+  TR = 'tr', // Turkish
+  VI = 'vi', // Vietnamese
+  ZH_HANT = 'zh-Hant', // ✅ Traditional Chinese (Corrected BCP 47)
+  ZH = 'zh', // Simplified Chinese
+}
