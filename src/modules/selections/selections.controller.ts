@@ -22,7 +22,7 @@ import { S3Service } from 'src/core/s3/s3.service';
 import { GetSelectionsForEditParams } from './dtos/get-selections-for-edit-params.dtos';
 import { SelectionsListResponseDto } from './dtos/selections-list-response.dto';
 import { CreateSelectionWithVideoBodyDto } from './dtos/create-selection-with-video-body.dto';
-import { UpdateSelectionNameBodyDto } from './dtos/update-selection-name-body.dto';
+import { UpdateSelectionBodyDto } from './dtos/update-selection-body.dto';
 import { GetSelectionsParams } from './dtos/get-selections-params.dto';
 
 @Controller('selections')
@@ -95,10 +95,10 @@ export class SelectionsController {
     );
   }
 
-  @Patch('/name')
+  @Patch()
   @UseGuards(JwtAuthGuard)
   async updateSelectionName(
-    @Body() body: UpdateSelectionNameBodyDto,
+    @Body() body: UpdateSelectionBodyDto,
     @Req() req: AuthRequest,
   ) {
     const user = req.user;

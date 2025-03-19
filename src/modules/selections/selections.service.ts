@@ -7,7 +7,7 @@ import { SelectionsListResponseDto } from './dtos/selections-list-response.dto';
 import { plainToInstance } from 'class-transformer';
 import { CreateSelectionWithVideoBodyDto } from './dtos/create-selection-with-video-body.dto';
 import { SelectionResponseDto } from './dtos/selection-response.dto';
-import { UpdateSelectionNameBodyDto } from './dtos/update-selection-name-body.dto';
+import { UpdateSelectionBodyDto } from './dtos/update-selection-body.dto';
 import { GetSelectionsParams } from './dtos/get-selections-params.dto';
 import { RedisService } from 'src/core/redis/redis.service';
 import { ILike } from 'typeorm';
@@ -220,10 +220,10 @@ export class SelectionsService {
   }
 
   async updateSelectionName(
-    body: UpdateSelectionNameBodyDto,
+    body: UpdateSelectionBodyDto,
     userFromToken: UserFromToken,
   ): Promise<SelectionResponseDto> {
-    const { gameId, selectionId, name } = body;
+    const { gameId, selectionId, name, resourceUrl } = body;
 
     const game = await this.gamesRepository.findOne({
       where: {
@@ -244,6 +244,7 @@ export class SelectionsService {
     }
 
     selection.name = name;
+    selection.resourceUrl = resourceUrl;
 
     // ✅ Use scan-based deletion to prevent Redis from slowing down
     await this.redisService.deleteKeysByPattern(

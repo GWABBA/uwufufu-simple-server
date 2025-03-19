@@ -109,6 +109,10 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    if (user.password === null) {
+      throw new UnauthorizedException('Please reset your password');
+    }
+
     // Compare passwords
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
