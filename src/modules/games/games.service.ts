@@ -335,7 +335,6 @@ export class GamesService {
       throw new NotFoundException('Game not found');
     }
 
-    console.log(categoryId);
     // 🔹 Find Category
     const category = await this.categoriesRepository.findOne({
       where: { id: categoryId },
@@ -362,5 +361,30 @@ export class GamesService {
     return plainToInstance(GameResponseDto, game, {
       excludeExtraneousValues: true,
     });
+  }
+
+  async deleteGame(params: GetGameParamsDto, user: UserFromToken) {
+    const { id } = params;
+
+    const game = await this.gamesRepository.findOne({
+      where: {
+        id: Number(id),
+        user: { id: user.userId },
+        deletedAt: null,
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    game.deletedAt = new Date();
+    await this.gamesRepository.save(game);
+
+    // 🔹 Cache Invalidation
+    const cacheKey = `game:${game.slug}`;
+    await this.redisService.deleteKey(cacheKey); // ✅ Delete cache after deletion
+
+    return { message: 'Game deleted successfully' };
   }
 }
