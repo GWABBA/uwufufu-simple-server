@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -78,5 +79,12 @@ export class GamesController {
   ) {
     const user = req.user;
     return this.gamesService.updateGame(params, updateGameBodyDto, user);
+  }
+
+  @Delete('/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteGame(@Req() req: AuthRequest, @Param() params: GetGameParamsDto) {
+    const user = req.user;
+    return this.gamesService.deleteGame(params, user);
   }
 }
