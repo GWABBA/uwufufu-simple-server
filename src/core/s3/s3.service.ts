@@ -37,7 +37,10 @@ export class S3Service {
     file: Express.Multer.File,
     folder: string,
   ): Promise<{ url: string; fileName: string; key: string }> {
-    const key = `${folder.replace(/[\b\t\r\n\f]/g, '').trim()}/${Date.now()}-${path.basename(file.originalname)}`;
+    const safeFilename = path
+      .basename(file.originalname)
+      .replace(/[^a-zA-Z0-9._-]/g, '');
+    const key = `${folder.replace(/[\b\t\r\n\f]/g, '').trim()}/${Date.now()}-${safeFilename}`;
 
     const params = {
       Bucket: this.bucketName,

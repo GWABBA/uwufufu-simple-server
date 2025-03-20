@@ -56,8 +56,9 @@ export class StartedGamesService {
       // ✅ Keep selection logic the same for now
       const randomTwoSelections = await queryRunner.manager.query(
         `SELECT * FROM selections WHERE "gameId" = $1 
+         AND "deletedAt" IS NULL 
          AND ctid IN (
-           SELECT ctid FROM selections WHERE "gameId" = $1 ORDER BY RANDOM() LIMIT 2
+           SELECT ctid FROM selections WHERE "gameId" = $1 AND "deletedAt" IS NULL ORDER BY RANDOM() LIMIT 2
          )`,
         [gameId],
       );
@@ -135,7 +136,6 @@ export class StartedGamesService {
           WHERE "id" = $2`,
         [pickedSelectionId, match.id],
       );
-
       const selectionsResult = await queryRunner.manager.query(
         `SELECT id, wins, losses, "finalWins", "finalLosses" FROM selections WHERE id IN ($1, $2)`,
         [
@@ -206,7 +206,7 @@ export class StartedGamesService {
       let candidates;
       if (previousRoundsOf === startedGame.roundsOf * 2) {
         const selectionsResult = await queryRunner.manager.query(
-          `SELECT id FROM selections WHERE "gameId" = $1`,
+          `SELECT id FROM selections WHERE "gameId" = $1 AND "deletedAt" IS NULL`,
           [startedGame.gameId],
         );
         candidates = selectionsResult.map((selection) => selection.id);
