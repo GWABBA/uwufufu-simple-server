@@ -34,17 +34,20 @@ export class SelectionsService {
       return JSON.parse(cachedData);
     }
 
-    // 🔹 Fetch from Database
-    const [selectionsData, total] =
-      await this.selectionsRepository.findAndCount({
+    const [selectionsData, total] = await Promise.all([
+      this.selectionsRepository.find({
         where: { game: { id: worldcupId }, deletedAt: null },
         take: perPage,
         skip: perPage * (page - 1),
         order: {
-          finalWinLossRatio: 'DESC', // Primary sorting column
-          wins: 'DESC', // Secondary sorting column
+          finalWinLossRatio: 'DESC',
+          winLossRatio: 'DESC',
         },
-      });
+      }),
+      this.selectionsRepository.count({
+        where: { game: { id: worldcupId }, deletedAt: null },
+      }),
+    ]);
 
     // 🔹 Add Ranking Field
     const selections = selectionsData.map((selection, index) => ({

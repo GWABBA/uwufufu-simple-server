@@ -165,6 +165,8 @@ export class StartedGamesService {
       winnerSelection.wins = (winnerSelection.wins || 0) + 1;
       loserSelection.losses = (loserSelection.losses || 0) + 1;
 
+      this.selectionsRepository.save([winnerSelection, loserSelection]);
+
       // ✅ Check if the round has ended
       const matchesCount = await this.matchesRepository.count({
         where: { startedGameId, roundsOf: match.roundsOf },

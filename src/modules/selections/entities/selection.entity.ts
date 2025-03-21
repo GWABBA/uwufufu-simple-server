@@ -12,6 +12,7 @@ import {
 import { Game } from '../../games/entities/game.entity';
 
 @Entity('selections')
+@Index(['gameId', 'deletedAt'])
 export class Selection {
   @PrimaryGeneratedColumn()
   id: number;
@@ -72,7 +73,21 @@ export class Selection {
       END
     `,
   })
+  @Index()
   finalWinLossRatio: number;
+
+  @Column({
+    type: 'double precision',
+    generatedType: 'STORED',
+    asExpression: `
+      CASE 
+        WHEN ("wins" + "losses") = 0 THEN 0 
+        ELSE "wins"::double precision / ("losses" + "wins")::double precision 
+      END
+    `,
+  })
+  @Index()
+  winLossRatio: number;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
