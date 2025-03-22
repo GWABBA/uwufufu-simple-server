@@ -30,9 +30,9 @@ export class SelectionsService {
 
     // 🔹 Check Cache First
     const cachedData = await this.redisService.getValue(cacheKey);
-    // if (cachedData) {
-    //   return JSON.parse(cachedData);
-    // }
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
 
     const [selectionsData, total] = await Promise.all([
       this.selectionsRepository.find({
@@ -193,17 +193,17 @@ export class SelectionsService {
   async getYouTubeVideoTitle(videoId: string): Promise<string | null> {
     try {
       const response = await fetch(
-        `https://www.youtube.com/watch?v=${videoId}`,
+        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
       );
-      const html = await response.text();
 
-      // Extract title using regex
-      const match = html.match(/<title>(.*?)<\/title>/);
-      if (match && match[1]) {
-        return match[1].replace(' - YouTube', '').trim(); // Clean title
+      if (!response.ok) {
+        throw new Error(
+          `YouTube oEmbed request failed with status ${response.status}`,
+        );
       }
 
-      return null;
+      const data = await response.json();
+      return data.title;
     } catch (error) {
       console.error('Failed to fetch YouTube title:', error);
       return null;
