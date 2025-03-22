@@ -17,4 +17,16 @@ export class UpdateSelectionBodyDto {
   @IsString()
   @Optional()
   resourceUrl: string;
+
+  @IsString()
+  @Optional()
+  videoUrl: string;
+
+  @IsNumber()
+  @Optional()
+  startTime: number;
+
+  @IsNumber()
+  @Optional()
+  endTime: number;
 }
