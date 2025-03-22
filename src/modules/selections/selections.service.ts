@@ -30,9 +30,9 @@ export class SelectionsService {
 
     // 🔹 Check Cache First
     const cachedData = await this.redisService.getValue(cacheKey);
-    if (cachedData) {
-      return JSON.parse(cachedData);
-    }
+    // if (cachedData) {
+    //   return JSON.parse(cachedData);
+    // }
 
     const [selectionsData, total] = await Promise.all([
       this.selectionsRepository.find({
@@ -226,7 +226,15 @@ export class SelectionsService {
     body: UpdateSelectionBodyDto,
     userFromToken: UserFromToken,
   ): Promise<SelectionResponseDto> {
-    const { gameId, selectionId, name, resourceUrl } = body;
+    const {
+      gameId,
+      selectionId,
+      name,
+      resourceUrl,
+      startTime,
+      endTime,
+      videoUrl,
+    } = body;
 
     const game = await this.gamesRepository.findOne({
       where: {
@@ -248,6 +256,15 @@ export class SelectionsService {
 
     selection.name = name;
     selection.resourceUrl = resourceUrl;
+    if (selection.isVideo) {
+      if (startTime) selection.startTime = startTime;
+      if (endTime) selection.endTime = endTime;
+      if (videoUrl && videoUrl !== selection.videoUrl) {
+        const videoId = this.getYouTubeVideoId(videoUrl);
+        selection.videoUrl = `https://www.youtube.com/embed/${videoId}`;
+        selection.resourceUrl = `https://img.youtube.com/vi/${videoId}/sddefault.jpg`;
+      }
+    }
 
     // ✅ Use scan-based deletion to prevent Redis from slowing down
     await this.redisService.deleteKeysByPattern(
