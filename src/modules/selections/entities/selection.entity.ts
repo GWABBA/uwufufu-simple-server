@@ -55,6 +55,7 @@ export class Selection {
   losses: number;
 
   @Column({ default: 0 })
+  @Index()
   finalWins: number;
 
   @Column({ default: 0 })

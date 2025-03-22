@@ -39,6 +39,9 @@ export class SelectionResponseDto {
   finalLosses: number;
 
   @Expose()
+  winLossRatio: number;
+
+  @Expose()
   gameId: number;
 
   @Expose()

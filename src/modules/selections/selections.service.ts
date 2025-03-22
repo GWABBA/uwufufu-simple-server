@@ -31,7 +31,7 @@ export class SelectionsService {
     // 🔹 Check Cache First
     const cachedData = await this.redisService.getValue(cacheKey);
     if (cachedData) {
-      return JSON.parse(cachedData);
+      // return JSON.parse(cachedData);
     }
 
     const [selectionsData, total] = await Promise.all([
@@ -40,7 +40,7 @@ export class SelectionsService {
         take: perPage,
         skip: perPage * (page - 1),
         order: {
-          finalWinLossRatio: 'DESC',
+          finalWins: 'DESC',
           winLossRatio: 'DESC',
         },
       }),
