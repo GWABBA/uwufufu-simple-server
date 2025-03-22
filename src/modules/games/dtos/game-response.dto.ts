@@ -57,5 +57,8 @@ export class GameResponseDto {
   user: User;
 
   @Expose()
+  plays: number;
+
+  @Expose()
   selectionsCount: number;
 }
