@@ -10,7 +10,7 @@ import { CreatePickDto } from './dtos/create-pick.dto';
 import { MatchesRepository } from './matches.repository';
 import { plainToInstance } from 'class-transformer';
 import { StartedGameResponseDto } from './dtos/started-game-response.dto';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { Match } from './entities/match.entity';
 import { AddResultImage } from './dtos/add-result-image-dto';
 import { GetStartedGameParamsDto } from './dtos/get-started-game-params.dto';
@@ -136,15 +136,14 @@ export class StartedGamesService {
           WHERE "id" = $2`,
         [pickedSelectionId, match.id],
       );
-      const selectionsResult = await queryRunner.manager.query(
-        `SELECT id, wins, losses, "finalWins", "finalLosses" FROM selections WHERE id IN ($1, $2)`,
-        [
+      const selectionsResult = await this.selectionsRepository.findBy({
+        id: In([
           pickedSelectionId,
           match.selection1Id === pickedSelectionId
             ? match.selection2Id
             : match.selection1Id,
-        ],
-      );
+        ]),
+      });
 
       if (selectionsResult.length !== 2) {
         throw new Error('Winner or loser selection not found');
