@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { Game } from 'src/modules/games/entities/game.entity';
 import { User } from 'src/modules/users/entities/user.entity';
@@ -49,6 +50,7 @@ export class StartedGame {
   matches: Match[];
 
   @CreateDateColumn()
+  @Index()
   createdAt: Date;
 
   @UpdateDateColumn()

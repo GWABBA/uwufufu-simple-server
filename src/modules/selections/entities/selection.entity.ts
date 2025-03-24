@@ -97,5 +97,6 @@ export class Selection {
   updatedAt: Date;
 
   @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  @Index()
   deletedAt: Date | null;
 }

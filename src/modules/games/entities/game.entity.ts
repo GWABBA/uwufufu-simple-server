@@ -15,6 +15,7 @@ import { Selection } from '../../selections/entities/selection.entity';
 import { Visibility } from '../../../core/enums/visibility.enum';
 import { Category } from 'src/modules/categories/entities/category.entity';
 import { Locales } from 'src/core/enums/locales.enum';
+import { StartedGame } from 'src/modules/started-games/entities/started-game.entity';
 
 @Entity('games')
 // ✅ Filters & Soft Deletes
@@ -97,5 +98,6 @@ export class Game {
   @DeleteDateColumn({ type: 'timestamp' }) // Tracks soft delete timestamp
   deletedAt?: Date;
 
-  startedGames: any;
+  @OneToMany(() => StartedGame, (startedGame) => startedGame.game)
+  startedGames: StartedGame[];
 }
