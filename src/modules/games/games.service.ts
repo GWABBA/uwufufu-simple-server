@@ -52,6 +52,12 @@ export class GamesService {
       .createQueryBuilder('game')
       .leftJoinAndSelect('game.user', 'user')
       .leftJoinAndSelect('game.category', 'category')
+      .loadRelationCountAndMap(
+        'game.selectionCount',
+        'game.selections',
+        'selection',
+        (qb) => qb.andWhere('selection.deletedAt IS NULL'), // ✅ Filters soft-deleted
+      )
       .where('game.deletedAt IS NULL')
       .andWhere('game.visibility = :visibility', {
         visibility: Visibility.IsPublic,
@@ -155,17 +161,6 @@ export class GamesService {
     if (!user) {
       throw new Error('User not found'); // Better to throw a custom exception
     }
-
-    // find
-    // don't set category when creating a game
-    // const category = await this.categoriesRepository.findOne({
-    //   where: {
-    //     id: categoryId,
-    //   },
-    // });
-    // if (!category) {
-    //   throw new Error('Category not found'); // Better to throw a custom exception
-    // }
 
     // Check if a slug already exists in the database
     const checkSlugExists = async (slug: string): Promise<boolean> => {

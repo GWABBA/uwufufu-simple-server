@@ -60,5 +60,8 @@ export class GameResponseDto {
   plays: number;
 
   @Expose()
+  startedGameCountToday?: number;
+
+  @Expose()
   selectionsCount: number;
 }
