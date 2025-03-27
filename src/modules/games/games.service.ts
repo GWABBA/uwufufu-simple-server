@@ -201,7 +201,7 @@ export class GamesService {
     // 🔹 1. Try fetching from cache
     const cachedGame = await this.redisService.getValue(cacheKey);
     if (cachedGame) {
-      // return JSON.parse(cachedGame);
+      return JSON.parse(cachedGame);
     }
 
     // 🔹 2. Fetch from database
