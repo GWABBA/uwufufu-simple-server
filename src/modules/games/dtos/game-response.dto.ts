@@ -60,6 +60,9 @@ export class GameResponseDto {
   plays: number;
 
   @Expose()
+  finishedPlays: number;
+
+  @Expose()
   startedGameCountToday?: number;
 
   @Expose()
