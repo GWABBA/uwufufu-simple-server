@@ -72,6 +72,9 @@ export class Game {
   @Column({ default: 0 })
   plays: number;
 
+  @Column({ default: 0 })
+  finishedPlays: number;
+
   @Column({
     type: 'enum',
     enum: Visibility,
