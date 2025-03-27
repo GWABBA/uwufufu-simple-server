@@ -109,6 +109,7 @@ export class StartedGamesService {
         [matchId],
       );
 
+      // find started game
       if (startedGameResult.length === 0)
         throw new NotFoundException('Started game not found');
       if (matchResult.length === 0)
@@ -117,6 +118,7 @@ export class StartedGamesService {
       const startedGame = startedGameResult[0];
       const match = matchResult[0];
 
+      // check selection id's are valid
       if (!pickedSelectionId || isNaN(pickedSelectionId)) {
         throw new BadRequestException('Invalid picked selection ID');
       }
@@ -130,6 +132,7 @@ export class StartedGamesService {
         throw new BadRequestException('Selection not in the match');
       }
 
+      // ✅ Update match with the winner
       await queryRunner.manager.query(
         `UPDATE matches 
           SET "winnerId" = $1 
@@ -194,6 +197,13 @@ export class StartedGamesService {
 
         // ✅ Save final results
         await this.selectionsRepository.save([winnerSelection, loserSelection]);
+
+        // Save number of finished games
+        await queryRunner.manager.query(
+          `UPDATE games SET "finishedPlays" = "finishedPlays" + 1 WHERE "id" = $1`,
+          [startedGame.gameId],
+        );
+
         await queryRunner.commitTransaction();
 
         return plainToInstance(
