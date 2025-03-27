@@ -89,6 +89,9 @@ export class Game {
   @Column({ default: false })
   isNsfw: boolean;
 
+  @Column({ default: false })
+  nsfwLockedByAdmin: boolean;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
 

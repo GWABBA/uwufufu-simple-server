@@ -342,10 +342,14 @@ export class GamesService {
     game.title = title;
     game.description = description;
     game.visibility = visibility;
-    game.isNsfw = isNsfw;
     game.category = category;
     game.coverImage = coverImage;
     game.locale = locale;
+    if (game.nsfwLockedByAdmin) {
+      game.isNsfw = true;
+    } else {
+      game.isNsfw = isNsfw;
+    }
 
     await this.gamesRepository.save(game);
 
