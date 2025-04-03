@@ -8,6 +8,15 @@ import { PaymentResponseDto } from './dtos/payment-response.dto';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Get('/active-subscription')
+  @UseGuards(JwtAuthGuard)
+  async fetchActiveSubscription(
+    @Req() req: AuthRequest,
+  ): Promise<PaymentResponseDto> {
+    const user = req.user;
+    return this.paymentsService.fetchActiveSubscription(user);
+  }
+
   @Get('/latest-subscription')
   @UseGuards(JwtAuthGuard)
   async fetchLatestSubscription(
