@@ -75,7 +75,7 @@ export class SelectionsService {
   async getSelectionsForEdit(
     params: GetSelectionsForEditParams,
   ): Promise<SelectionsListResponseDto> {
-    const { page, perPage, worldcupId, keyword } = params;
+    const { page, perPage, worldcupId, keyword, sortBy } = params;
 
     const whereCondition: any = {
       game: { id: worldcupId },
@@ -91,7 +91,7 @@ export class SelectionsService {
       where: whereCondition,
       take: perPage,
       skip: perPage * (page - 1),
-      order: { createdAt: 'DESC' },
+      order: { [sortBy]: 'DESC' },
     });
 
     return plainToInstance(

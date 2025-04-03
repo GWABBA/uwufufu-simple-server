@@ -91,6 +91,7 @@ export class Selection {
   winLossRatio: number;
 
   @CreateDateColumn({ type: 'timestamp' })
+  @Index()
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamp' })

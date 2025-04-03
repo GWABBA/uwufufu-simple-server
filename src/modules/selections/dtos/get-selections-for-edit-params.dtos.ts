@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import { IsNumber, IsPositive, IsOptional } from 'class-validator';
+import { SelectionsListSortBy } from 'src/core/enums/selections-list-sort-by.enum';
 
 export class GetSelectionsForEditParams {
   @Type(() => Number)
@@ -22,4 +23,8 @@ export class GetSelectionsForEditParams {
 
   @IsOptional()
   keyword?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => value ?? 'name')
+  sortBy: SelectionsListSortBy;
 }
