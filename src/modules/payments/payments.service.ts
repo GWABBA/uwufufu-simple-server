@@ -21,6 +21,34 @@ export class PaymentsService {
     private configService: ConfigService,
   ) {}
 
+  async fetchActiveSubscription(
+    userFromToken: UserFromToken,
+  ): Promise<PaymentResponseDto | null> {
+    const userFromDb = await this.usersRepository.findOne({
+      where: { id: userFromToken.userId, deletedAt: IsNull() },
+    });
+
+    if (!userFromDb) {
+      throw new NotFoundException('User not found');
+    }
+    // 🔍 Find the latest ACTIVE subscription
+    const activeSubscription = await this.paymentRepository.findOne({
+      where: {
+        user: { id: userFromDb.id },
+        status: 'ACTIVE',
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!activeSubscription) {
+      throw new NotFoundException('No active subscription found.');
+    }
+    // ✅ Transform the result into `PaymentResponseDto`
+    return plainToInstance(PaymentResponseDto, activeSubscription, {
+      excludeExtraneousValues: true,
+    });
+  }
+
   async fetchLatestSubscription(
     userFromToken: UserFromToken,
   ): Promise<PaymentResponseDto | null> {
@@ -64,7 +92,7 @@ export class PaymentsService {
 
     try {
       const response = await axios.post(
-        'https://api-m.sandbox.paypal.com/v1/oauth2/token',
+        'https://api-m.paypal.com/v1/oauth2/token',
         'grant_type=client_credentials',
         {
           headers: {
@@ -112,7 +140,7 @@ export class PaymentsService {
 
     try {
       const response = await axios.post(
-        `https://api-m.sandbox.paypal.com/v1/billing/subscriptions/${subscriptionId}/cancel`,
+        `https://api-m.paypal.com/v1/billing/subscriptions/${subscriptionId}/cancel`,
         { reason: 'User requested cancellation' },
         {
           headers: {
