@@ -31,7 +31,7 @@ export class SelectionsService {
     // 🔹 Check Cache First
     const cachedData = await this.redisService.getValue(cacheKey);
     if (cachedData) {
-      // return JSON.parse(cachedData);
+      return JSON.parse(cachedData);
     }
 
     const [selectionsData, total] = await Promise.all([
