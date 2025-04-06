@@ -205,23 +205,47 @@ export class SelectionsService {
   }
 
   async getYouTubeVideoTitle(videoId: string): Promise<string | null> {
-    try {
-      const response = await fetch(
-        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
-      );
+    const maxRetries = 2;
 
-      if (!response.ok) {
-        throw new Error(
-          `YouTube oEmbed request failed with status ${response.status}`,
+    for (let i = 0; i <= maxRetries; i++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1000); // 1 second
+
+      try {
+        const response = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+          { signal: controller.signal },
         );
-      }
 
-      const data = await response.json();
-      return data.title;
-    } catch (error) {
-      console.error('Failed to fetch YouTube title:', error);
-      return null;
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          throw new Error(
+            `YouTube oEmbed request failed with status ${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+        return data.title;
+      } catch (error: any) {
+        clearTimeout(timeout);
+
+        if (i === maxRetries) {
+          console.error(
+            '❌ Failed to fetch YouTube title after retries:',
+            error,
+          );
+          return null;
+        }
+
+        console.warn(
+          `[YouTube Retry] Attempt ${i + 1} failed: ${error.message}`,
+        );
+        await new Promise((res) => setTimeout(res, 300 * (i + 1))); // retry delay
+      }
     }
+
+    return null;
   }
 
   getYouTubeVideoId(url: string): string | null {
