@@ -129,16 +129,12 @@ export class SelectionsService {
 
       const createdSelection = await this.selectionsRepository.save(selection);
 
-      try {
-        await this.redisService.deleteKeysByPattern(
-          `selections:worldcup:${game.id}:*`,
-        );
-      } catch (err) {
-        console.error(
-          '[Redis] Failed to deleteKeysByPattern in createSelectionWithImage:',
-          err,
-        );
-      }
+      this.redisService
+        .deleteKeysByPattern(`selections:worldcup:${game.id}:*`)
+        .catch((err) => {
+          console.error('[Redis] Failed to deleteKeysByPattern:', err);
+        });
+
       return createdSelection;
     } catch (error) {
       throw new Error(error);
@@ -188,16 +184,12 @@ export class SelectionsService {
         endTime,
       });
       const createSelection = await this.selectionsRepository.save(selection);
-      try {
-        await this.redisService.deleteKeysByPattern(
-          `selections:worldcup:${game.id}:*`,
-        );
-      } catch (err) {
-        console.error(
-          '[Redis] Failed to deleteKeysByPattern in createSelectionWithVideo:',
-          err,
-        );
-      }
+      this.redisService
+        .deleteKeysByPattern(`selections:worldcup:${game.id}:*`)
+        .catch((err) => {
+          console.error('[Redis] Failed to deleteKeysByPattern:', err);
+        });
+
       return createSelection;
     } catch (error) {
       throw new Error(error);
@@ -304,17 +296,11 @@ export class SelectionsService {
       }
     }
 
-    // ✅ Use scan-based deletion to prevent Redis from slowing down
-    try {
-      await this.redisService.deleteKeysByPattern(
-        `selections:worldcup:${gameId}:*`,
-      );
-    } catch (err) {
-      console.error(
-        '[Redis] Failed to deleteKeysByPattern in updateSelectionName:',
-        err,
-      );
-    }
+    this.redisService
+      .deleteKeysByPattern(`selections:worldcup:${gameId}:*`)
+      .catch((err) => {
+        console.error('[Redis] Failed to deleteKeysByPattern:', err);
+      });
 
     return plainToInstance(
       SelectionResponseDto,
@@ -342,16 +328,11 @@ export class SelectionsService {
     selection.deletedAt = new Date();
     const deleteResult = await this.selectionsRepository.save(selection);
 
-    try {
-      await this.redisService.deleteKeysByPattern(
-        `selections:worldcup:${selection.game.id}:*`,
-      );
-    } catch (err) {
-      console.error(
-        '[Redis] Failed to deleteKeysByPattern in deleteSelection:',
-        err,
-      );
-    }
+    this.redisService
+      .deleteKeysByPattern(`selections:worldcup:${selection.game.id}:*`)
+      .catch((err) => {
+        console.error('Redis error:', err);
+      });
 
     return deleteResult;
   }
