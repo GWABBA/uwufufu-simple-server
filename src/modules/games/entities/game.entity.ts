@@ -61,6 +61,7 @@ export class Game {
   category: Category;
 
   @Column({ nullable: false })
+  @Index('idx_games_title_trgm', { synchronize: false })
   title: string;
 
   @Column({ nullable: false })
