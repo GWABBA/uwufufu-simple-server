@@ -26,6 +26,7 @@ export class StartedGame {
   @Column()
   gameId: number;
 
+  @Index()
   @ManyToOne(() => User, {
     onDelete: 'CASCADE',
     nullable: true,
