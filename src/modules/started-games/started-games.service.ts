@@ -15,6 +15,7 @@ import { Match } from './entities/match.entity';
 import { AddResultImage } from './dtos/add-result-image-dto';
 import { GetStartedGameParamsDto } from './dtos/get-started-game-params.dto';
 import { StartedGameResultResponseDto } from './dtos/started-game-result-response.dto';
+import { UserFromToken } from '../auth/types/auth-request.interface';
 
 @Injectable()
 export class StartedGamesService {
@@ -25,7 +26,10 @@ export class StartedGamesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async createStartedGame(createStartedGameDto: CreateStartedGameDto) {
+  async createStartedGame(
+    createStartedGameDto: CreateStartedGameDto,
+    user: UserFromToken,
+  ) {
     const { gameId, roundsOf } = createStartedGameDto;
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -47,9 +51,9 @@ export class StartedGamesService {
 
       // ✅ Optimized: Insert `startedGame`
       const startedGameInsert = await queryRunner.manager.query(
-        `INSERT INTO started_games ("gameId", "roundsOf", "status") 
-         VALUES ($1, $2, 'IN_PROGRESS') RETURNING *`,
-        [game.id, roundsOf],
+        `INSERT INTO started_games ("gameId", "roundsOf", "userId", "status") 
+         VALUES ($1, $2, $3, 'IN_PROGRESS') RETURNING *`,
+        [game.id, roundsOf, user ? user.userId : null],
       );
       const startedGame = startedGameInsert[0]; // Get started game object
 
