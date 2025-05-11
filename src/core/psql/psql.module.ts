@@ -15,6 +15,7 @@ import { SubscriptionPlan } from 'src/modules/subscription-plans/entities/subscr
 import { Match } from 'src/modules/started-games/entities/match.entity';
 import AdminUser from 'nestjs-admin/dist/src/adminUser/adminUser.entity';
 import { Payment } from 'src/modules/payments/entities/payment.entity';
+import { Report } from 'src/modules/reports/entities/report.entity';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { Payment } from 'src/modules/payments/entities/payment.entity';
             SubscriptionPlan,
             AdminUser,
             Payment,
+            Report,
           ],
           synchronize: configService.get<string>('app.env') !== 'production', // ❌ Set false in production
           ssl: configService.get<string>('psql.ssl')

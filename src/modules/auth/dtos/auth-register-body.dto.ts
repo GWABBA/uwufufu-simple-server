@@ -38,3 +38,11 @@ export class AuthUpdateUserBodyDto {
   @IsUrl()
   profileImage: string;
 }
+
+export class AuthUpdateNameBodyDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(4)
+  @MaxLength(20)
+  name: string;
+}

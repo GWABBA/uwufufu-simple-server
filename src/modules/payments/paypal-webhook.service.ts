@@ -2,6 +2,7 @@ import { UsersRepository } from './../users/users.repository';
 import { Injectable } from '@nestjs/common';
 import { PaymentRepository } from './payments.repository';
 import { IsNull } from 'typeorm';
+import fetch from 'node-fetch';
 
 @Injectable()
 export class PaypalWebhookService {
@@ -10,9 +11,41 @@ export class PaypalWebhookService {
     private usersRepository: UsersRepository,
   ) {}
 
+  private readonly DISCORD_WEBHOOK_URL =
+    'https://discord.com/api/webhooks/1370660983600582666/FUf0MgmC26YAvAO0-uvJoLdYnHnNrelqmGZAUxVPAZgd723eR8_7KguJsr4ToxDTJONT';
+
   async handleWebhook(event: any) {
     const eventType = event.event_type;
     const resource = event.resource;
+
+    // Send webhook event to Discord
+    try {
+      const message = `💰 **PayPal Webhook Event**\n\`\`\`json\n${JSON.stringify(event, null, 4)}\n\`\`\``;
+
+      // Check if message exceeds Discord's 2000 character limit
+      if (message.length > 2000) {
+        // If it does, send a truncated version
+        const truncatedMessage = `💰 **PayPal Webhook Event**\n\`\`\`json\n${JSON.stringify(event, null, 2)}\n\`\`\``;
+        await fetch(this.DISCORD_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: truncatedMessage,
+          }),
+        });
+      } else {
+        await fetch(this.DISCORD_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: message,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('❌ Failed to send Discord webhook:', error);
+      // Continue processing the webhook even if Discord notification fails
+    }
 
     console.log(`📢 PayPal Webhook Event: ${eventType}`);
     console.log(JSON.stringify(resource, null, 2));
@@ -125,24 +158,38 @@ export class PaypalWebhookService {
           return;
         }
 
-        // ✅ Store Recurring Payment as a New Record (since it's a new charge)
-        await this.paymentRepository.createPayment({
-          user: existingPayment.user,
-          paypalOrderId: paypalPaymentId,
-          status: 'COMPLETED',
-          amount: amount,
-          currency: currency,
-          payerEmail: paypalEmail,
-        });
+        try {
+          // ✅ Store Recurring Payment as a New Record (since it's a new charge)
+          await this.paymentRepository.createPayment({
+            user: existingPayment.user,
+            paypalOrderId: paypalPaymentId,
+            status: 'COMPLETED',
+            amount: amount,
+            currency: currency,
+            payerEmail: paypalEmail,
+          });
 
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
+          const nextMonth = new Date();
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
 
-        await this.usersRepository.update(existingPayment.user.id, {
-          subscriptionStartDate: new Date(),
-          subscriptionEndDate: nextMonth,
-          tier: 'plus',
-        });
+          await this.usersRepository.update(existingPayment.user.id, {
+            subscriptionStartDate: new Date(),
+            subscriptionEndDate: nextMonth,
+            tier: 'plus',
+          });
+        } catch (e) {
+          try {
+            await fetch(this.DISCORD_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: `${JSON.stringify(e, null, 4)}`,
+              }),
+            });
+          } catch (error) {
+            console.error('❌ Failed to send Discord webhook:', error);
+          }
+        }
 
         console.log(
           `✅ Recurring Payment recorded for subscription ${subscriptionId}: $${amount} ${currency}`,

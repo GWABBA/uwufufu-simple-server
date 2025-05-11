@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { SelectionsModule } from './selections/selections.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PaymentsModule } from './payments/payments.module';
     ImagesModule,
     SelectionsModule,
     PaymentsModule,
+    ReportsModule,
   ],
   exports: [
     AuthModule,
@@ -31,6 +33,7 @@ import { PaymentsModule } from './payments/payments.module';
     ImagesModule,
     SelectionsModule,
     PaymentsModule,
+    ReportsModule,
   ],
 })
 export class IndexModule {}
