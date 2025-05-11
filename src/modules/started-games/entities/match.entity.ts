@@ -12,6 +12,7 @@ import { StartedGame } from './started-game.entity';
 
 @Entity('matches')
 @Index('idx_matches_startedGameId_roundsOf', ['startedGameId', 'roundsOf'])
+@Index('idx_matches_startedGameId_createdAt', ['startedGameId', 'createdAt'])
 export class Match {
   @PrimaryGeneratedColumn()
   id: number;

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import {
   AuthRegisterBodyDto,
+  AuthUpdateNameBodyDto,
   AuthUpdateUserBodyDto,
 } from './dtos/auth-register-body.dto';
 import { AuthService } from './auth.service';
@@ -55,6 +56,16 @@ export class AuthController {
   ): Promise<UserResponseDto> {
     const user = req.user;
     return this.authService.updateMe(user, authUpdateBodyDto);
+  }
+
+  @Put('/me/name')
+  @UseGuards(JwtAuthGuard)
+  async updateName(
+    @Req() req: AuthRequest,
+    @Body() authUpdateNameBodyDto: AuthUpdateNameBodyDto,
+  ): Promise<UserResponseDto> {
+    const user = req.user;
+    return this.authService.updateName(user, authUpdateNameBodyDto);
   }
 
   @Patch('/password')

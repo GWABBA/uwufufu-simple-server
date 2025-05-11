@@ -13,6 +13,7 @@ import postmarkConfig from 'src/config/postmark.config';
 import { EmailModule } from 'src/core/email/email.module';
 import { EmailTokensModule } from 'src/modules/email-tokens/email-tokens.module';
 import paypalConfig from 'src/config/paypal.config';
+import discordConfig from 'src/config/discord.config';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import paypalConfig from 'src/config/paypal.config';
         psqlConfig,
         postmarkConfig,
         paypalConfig,
+        discordConfig,
       ],
     }),
     PSQLModule,

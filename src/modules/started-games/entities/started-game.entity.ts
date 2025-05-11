@@ -15,6 +15,7 @@ import { StartedGameStatus } from 'src/core/enums/startedGameStatus.enum';
 import { Match } from './match.entity';
 
 @Entity('started_games')
+@Index('idx_started_games_user_created', ['user', 'createdAt'])
 export class StartedGame {
   @PrimaryGeneratedColumn()
   id: number;
@@ -51,7 +52,6 @@ export class StartedGame {
   matches: Match[];
 
   @CreateDateColumn()
-  @Index()
   createdAt: Date;
 
   @UpdateDateColumn()

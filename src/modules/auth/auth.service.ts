@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
   AuthRegisterBodyDto,
+  AuthUpdateNameBodyDto,
   AuthUpdateUserBodyDto,
 } from './dtos/auth-register-body.dto';
 import { AuthResponseDto } from './dtos/auth-response.dto';
@@ -20,7 +22,7 @@ import { UserFromToken } from './types/auth-request.interface';
 import { EmailService } from 'src/core/email/email.service';
 import { AuthEmailVerificationDto } from './dtos/auth-email-verification.dto';
 import { EmailTokensRepository } from '../email-tokens/email-tokens.repository';
-import { IsNull } from 'typeorm';
+import { IsNull, Not } from 'typeorm';
 import { ChangePasswordBodyDto } from './dtos/change-password-body.dto';
 
 @Injectable()
@@ -94,6 +96,40 @@ export class AuthService {
     await this.usersRepository.update(user.userId, updatedUser);
 
     return plainToInstance(UserResponseDto, updatedUser);
+  }
+
+  async updateName(
+    user: UserFromToken,
+    authUpdateNameBodyDto: AuthUpdateNameBodyDto,
+  ): Promise<UserResponseDto> {
+    const { name } = authUpdateNameBodyDto;
+
+    const userFromDb = await this.usersRepository.findOneBy({
+      id: user.userId,
+    });
+
+    if (!userFromDb) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 🔍 Check for duplicate name (used by another user)
+    const duplicateUser = await this.usersRepository.findOne({
+      where: {
+        name,
+        id: Not(user.userId),
+      },
+    });
+
+    if (duplicateUser) {
+      throw new ConflictException('This name is already taken');
+    }
+
+    await this.usersRepository.update(user.userId, { name });
+
+    return plainToInstance(UserResponseDto, {
+      ...userFromDb,
+      name,
+    });
   }
 
   async login(authLoginBodyDto: AuthLoginBodyDto): Promise<AuthResponseDto> {

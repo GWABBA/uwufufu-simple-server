@@ -16,6 +16,9 @@ import { AddResultImage } from './dtos/add-result-image-dto';
 import { GetStartedGameParamsDto } from './dtos/get-started-game-params.dto';
 import { StartedGameResultResponseDto } from './dtos/started-game-result-response.dto';
 import { UserFromToken } from '../auth/types/auth-request.interface';
+import { GetStartedGamesQueryDto } from './dtos/get-started-games-query.dto';
+import { StartedGameWithGameDto } from './dtos/started-game-with-game.dto';
+import { GetStartedGameWithoutSlugParamsDto } from './dtos/get-started-game-without-slug-params.dto';
 
 @Injectable()
 export class StartedGamesService {
@@ -25,6 +28,22 @@ export class StartedGamesService {
     private readonly matchesRepository: MatchesRepository,
     private readonly dataSource: DataSource,
   ) {}
+
+  async getStartedGames(user: UserFromToken, query: GetStartedGamesQueryDto): Promise<StartedGameWithGameDto[]> {
+    const { page = 1, perPage = 10 } = query;
+    const skip = (page - 1) * perPage;
+    
+    const startedGames = await this.startedGamesRepository.find({
+      where: { user: { id: user.userId } },
+      order: { createdAt: 'DESC' },
+      relations: ['game'],
+      skip,
+      take: perPage,
+      withDeleted: true,
+    });
+    
+    return plainToInstance(StartedGameWithGameDto, startedGames, { excludeExtraneousValues: true });
+  }
 
   async createStartedGame(
     createStartedGameDto: CreateStartedGameDto,
@@ -335,5 +354,51 @@ export class StartedGamesService {
     return plainToInstance(StartedGameResultResponseDto, startedGame, {
       excludeExtraneousValues: true,
     });
+  }
+
+  async getStartedGameById(params: GetStartedGameWithoutSlugParamsDto, user: UserFromToken) {
+    const { id: startedGameId } = params;
+
+    // Find the started game with its game relation
+    const startedGame = await this.startedGamesRepository.findOne({
+      where: { id: startedGameId },
+      relations: ['game', 'user'],
+    });
+
+    // Check if the started game exists and belongs to the user
+    if (!startedGame) {
+      throw new NotFoundException('Started game not found');
+    }
+
+    if (!startedGame.user || startedGame.user.id !== user.userId) {
+      throw new BadRequestException('This started game does not belong to you');
+    }
+
+    // Find the latest match for this started game
+    const latestMatch = await this.matchesRepository.findOne({
+      where: { startedGameId },
+      order: { createdAt: 'DESC' },
+      relations: ['selection1', 'selection2'],
+    });
+
+    if (!latestMatch) {
+      throw new NotFoundException('No matches found for this started game');
+    }
+
+    // Get the count of matches in the current round
+    const matchesCount = await this.matchesRepository.count({
+      where: { startedGameId, roundsOf: latestMatch.roundsOf },
+    });
+
+    // Return a response similar to createPick but without creating a new match
+    return plainToInstance(
+      StartedGameResponseDto,
+      {
+        startedGame,
+        match: latestMatch,
+        matchNumberInRound: matchesCount,
+      },
+      { excludeExtraneousValues: true },
+    );
   }
 }
