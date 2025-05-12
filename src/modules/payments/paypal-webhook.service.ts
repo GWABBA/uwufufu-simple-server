@@ -136,64 +136,120 @@ export class PaypalWebhookService {
         const paypalPaymentId = resource.id;
         const amount = resource.amount.value;
         const currency = resource.amount.currency_code;
-        const subscriptionId = resource.billing_agreement_id; // ✅ Links to the subscription
+        const subscriptionId = resource.billing_agreement_id;
         const paypalEmail = resource?.payer?.email_address || null;
 
+        // Send initial webhook to Discord
+        try {
+          await fetch(this.DISCORD_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: `🔄 **Processing Subscription Renewal**\n\`\`\`json\n${JSON.stringify(resource, null, 4)}\n\`\`\``,
+            }),
+          });
+        } catch (error) {
+          console.error('❌ Failed to send initial Discord webhook:', error);
+        }
+
         if (!subscriptionId) {
-          console.warn(
-            `⚠️ No subscription ID found for payment: ${paypalPaymentId}`,
-          );
+          const errorMsg = `⚠️ No subscription ID found for payment: ${paypalPaymentId}`;
+          console.warn(errorMsg);
+          try {
+            await fetch(this.DISCORD_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: `❌ ${errorMsg}`,
+              }),
+            });
+          } catch (error) {
+            console.error('❌ Failed to send Discord webhook:', error);
+          }
           return;
         }
 
         // 🔍 Find Existing Subscription
         const existingPayment = await this.paymentRepository.findOne({
           where: { paypalOrderId: subscriptionId },
+          relations: ['user'],
         });
 
         if (!existingPayment) {
-          console.warn(
-            `⚠️ No existing subscription found for Payment: ${paypalPaymentId}`,
-          );
-          return;
-        }
-
-        try {
-          // ✅ Store Recurring Payment as a New Record (since it's a new charge)
-          await this.paymentRepository.createPayment({
-            user: existingPayment.user,
-            paypalOrderId: paypalPaymentId,
-            status: 'COMPLETED',
-            amount: amount,
-            currency: currency,
-            payerEmail: paypalEmail,
-          });
-
-          const nextMonth = new Date();
-          nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-          await this.usersRepository.update(existingPayment.user.id, {
-            subscriptionStartDate: new Date(),
-            subscriptionEndDate: nextMonth,
-            tier: 'plus',
-          });
-        } catch (e) {
+          const errorMsg = `⚠️ No existing subscription found for Payment: ${paypalPaymentId}`;
+          console.warn(errorMsg);
           try {
             await fetch(this.DISCORD_WEBHOOK_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                content: `${JSON.stringify(e, null, 4)}`,
+                content: `❌ ${errorMsg}`,
               }),
             });
           } catch (error) {
             console.error('❌ Failed to send Discord webhook:', error);
           }
+          return;
         }
 
-        console.log(
-          `✅ Recurring Payment recorded for subscription ${subscriptionId}: $${amount} ${currency}`,
-        );
+        try {
+          // 1. Mark current subscription as COMPLETED
+          await this.paymentRepository.updatePaymentStatus(
+            subscriptionId,
+            'COMPLETED',
+          );
+
+          // 2. Create new ACTIVE subscription record
+          await this.paymentRepository.createPayment({
+            user: existingPayment.user,
+            paypalOrderId: paypalPaymentId,
+            status: 'ACTIVE',
+            amount: amount,
+            currency: currency,
+            payerEmail: paypalEmail,
+          });
+
+          // 3. Update user's subscription dates
+          const currentEndDate = existingPayment.user.subscriptionEndDate || new Date();
+          const nextMonth = new Date(currentEndDate);
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+          await this.usersRepository.update(existingPayment.user.id, {
+            subscriptionEndDate: nextMonth,
+            tier: 'plus',
+          });
+
+          // Send success webhook
+          try {
+            await fetch(this.DISCORD_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: `✅ **Subscription Renewed Successfully**\n👤 User ID: ${existingPayment.user.id}\n💰 Amount: ${amount} ${currency}\n📅 New End Date: ${nextMonth.toISOString()}`,
+              }),
+            });
+          } catch (error) {
+            console.error('❌ Failed to send success Discord webhook:', error);
+          }
+
+          console.log(
+            `✅ Recurring Payment recorded for subscription ${subscriptionId}: $${amount} ${currency}`,
+          );
+        } catch (e) {
+          // Send error to Discord
+          try {
+            await fetch(this.DISCORD_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: `❌ **Subscription Renewal Error**\n\`\`\`json\n${JSON.stringify(e, null, 4)}\n\`\`\``,
+              }),
+            });
+          } catch (error) {
+            console.error('❌ Failed to send error Discord webhook:', error);
+          }
+          throw e; // Re-throw to handle at controller level
+        }
         break;
       }
 
