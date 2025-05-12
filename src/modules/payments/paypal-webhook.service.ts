@@ -12,43 +12,11 @@ export class PaypalWebhookService {
   ) {}
 
   private readonly DISCORD_WEBHOOK_URL =
-    'https://discord.com/api/webhooks/1370660983600582666/FUf0MgmC26YAvAO0-uvJoLdYnHnNrelqmGZAUxVPAZgd723eR8_7KguJsr4ToxDTJONT';
+    'https://discord.com/api/webhooks/1371276492977471649/hz5Mi4SSD4hbcAi7DykUgn2hCC0DP3vCTBlP4W1oTaHfkkgWbhuTLbMTAZ-hsCJWF02R';
 
   async handleWebhook(event: any) {
     const eventType = event.event_type;
     const resource = event.resource;
-
-    // Send webhook event to Discord
-    try {
-      const message = `💰 **PayPal Webhook Event**\n\`\`\`json\n${JSON.stringify(event, null, 4)}\n\`\`\``;
-
-      // Check if message exceeds Discord's 2000 character limit
-      if (message.length > 2000) {
-        // If it does, send a truncated version
-        const truncatedMessage = `💰 **PayPal Webhook Event**\n\`\`\`json\n${JSON.stringify(event, null, 2)}\n\`\`\``;
-        await fetch(this.DISCORD_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: truncatedMessage,
-          }),
-        });
-      } else {
-        await fetch(this.DISCORD_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: message,
-          }),
-        });
-      }
-    } catch (error) {
-      console.error('❌ Failed to send Discord webhook:', error);
-      // Continue processing the webhook even if Discord notification fails
-    }
-
-    console.log(`📢 PayPal Webhook Event: ${eventType}`);
-    console.log(JSON.stringify(resource, null, 2));
 
     switch (eventType) {
       // ✅ Handle New Subscription Activation
