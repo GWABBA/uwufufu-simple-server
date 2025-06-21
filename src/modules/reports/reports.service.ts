@@ -14,7 +14,7 @@ export class ReportsService {
   ) {}
 
   private readonly DISCORD_WEBHOOK_URL =
-    'https://discord.com/api/webhooks/1362245590154477619/T7A_tXzxffBXeo7qVMN62X6ZIZ2q-CF5ZAj7u-tarRXJMwEOB_SsmFVoXjlZstsvQDDg';
+    'https://discord.com/api/webhooks/1371289888506253353/W8v11wRYdvdOisvI9ONlFBtszjZB9lEBEovOMsLiNJZF0JEMv2sVZsZINa5bgl1s6Va2';
 
   async createReport(
     createReportBodyDto: CreateReportBodyDto,
