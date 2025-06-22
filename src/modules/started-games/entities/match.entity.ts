@@ -30,13 +30,13 @@ export class Match {
   @ManyToOne(() => Selection, { onDelete: 'CASCADE' })
   selection1: Selection;
 
-  @Column()
+  @Column({ nullable: true })
   selection1Id: number;
 
   @ManyToOne(() => Selection, { onDelete: 'CASCADE' })
   selection2: Selection;
 
-  @Column()
+  @Column({ nullable: true })
   selection2Id: number;
 
   @Column({ nullable: true })

@@ -10,7 +10,7 @@ import { CreatePickDto } from './dtos/create-pick.dto';
 import { MatchesRepository } from './matches.repository';
 import { plainToInstance } from 'class-transformer';
 import { StartedGameResponseDto } from './dtos/started-game-response.dto';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, IsNull, LessThanOrEqual, Not } from 'typeorm';
 import { Match } from './entities/match.entity';
 import { AddResultImage } from './dtos/add-result-image-dto';
 import { GetStartedGameParamsDto } from './dtos/get-started-game-params.dto';
@@ -19,6 +19,8 @@ import { UserFromToken } from '../auth/types/auth-request.interface';
 import { GetStartedGamesQueryDto } from './dtos/get-started-games-query.dto';
 import { StartedGameWithGameDto } from './dtos/started-game-with-game.dto';
 import { GetStartedGameWithoutSlugParamsDto } from './dtos/get-started-game-without-slug-params.dto';
+import { StartedGame } from './entities/started-game.entity';
+import { StartedGameStatus } from 'src/core/enums/startedGameStatus.enum';
 
 @Injectable()
 export class StartedGamesService {
@@ -52,58 +54,91 @@ export class StartedGamesService {
     const { gameId, roundsOf } = createStartedGameDto;
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    await queryRunner.startTransaction(); // ✅ Start Transaction
-
+    await queryRunner.startTransaction();
+  
     try {
-      // ✅ Optimized: Find the game
       const gameResult = await queryRunner.manager.query(
         `SELECT * FROM games WHERE "id" = $1 AND "visibility" <> 'IS_CLOSED'`,
         [gameId],
       );
       const game = gameResult[0];
-
-      // ✅ Optimized: Update plays in a single query
+  
       await queryRunner.manager.query(
         `UPDATE games SET "plays" = "plays" + 1 WHERE "id" = $1`,
         [gameId],
       );
-
-      // ✅ Optimized: Insert `startedGame`
+  
       const startedGameInsert = await queryRunner.manager.query(
         `INSERT INTO started_games ("gameId", "roundsOf", "userId", "status") 
          VALUES ($1, $2, $3, 'IN_PROGRESS') RETURNING *`,
         [game.id, roundsOf, user ? user.userId : null],
       );
-      const startedGame = startedGameInsert[0]; // Get started game object
-
-      // ✅ Keep selection logic the same for now
-      const randomTwoSelections = await queryRunner.manager.query(
-        `SELECT * FROM selections WHERE "gameId" = $1 
-         AND "deletedAt" IS NULL 
-         AND ctid IN (
-           SELECT ctid FROM selections WHERE "gameId" = $1 AND "deletedAt" IS NULL ORDER BY RANDOM() LIMIT 2
-         )`,
+      const startedGame = startedGameInsert[0];
+  
+      const selections = await queryRunner.manager.query(
+        `SELECT * FROM selections WHERE "gameId" = $1 AND "deletedAt" IS NULL`,
         [gameId],
       );
-
-      if (randomTwoSelections.length < 2) {
+  
+      if (selections.length < 2) {
         throw new Error('Not enough selections to start a match.');
       }
+  
+      this.fisherYatesShuffle(selections);
+  
+      const total = selections.length;
+      const nextPower = this.getNextPowerOfTwo(total);
+      const byesNeeded = nextPower - total;
+  
+      const byeSelections = selections.slice(0, byesNeeded);
+      const firstRoundCandidates = selections.slice(byesNeeded);
 
-      // ✅ Creating match object (no change needed)
-      const match = queryRunner.manager.create(Match, {
-        roundsOf,
-        selection1: randomTwoSelections[0],
-        selection2: randomTwoSelections[1],
-        startedGame,
-      });
-      await queryRunner.manager.save(match);
-
-      // ✅ Commit Transaction
+      let byesCount = 0;
+  
+      // Create bye matches
+      for (const selection of byeSelections) {
+        await queryRunner.manager.insert(Match, {
+          startedGameId: startedGame.id,
+          roundsOf,
+          selection1Id: selection.id,
+          selection2Id: null,
+          winnerId: selection.id,
+        });
+        byesCount++;
+      }
+  
+      // Create only the first playable match
+      if (firstRoundCandidates.length >= 2) {
+        const sel1 = firstRoundCandidates[0];
+        const sel2 = firstRoundCandidates[1];
+  
+        await queryRunner.manager.insert(Match, {
+          startedGameId: startedGame.id,
+          roundsOf,
+          selection1Id: sel1.id,
+          selection2Id: sel2.id,
+        });
+      }
+  
       await queryRunner.commitTransaction();
+  
+      const firstMatch = await this.matchesRepository.findOne({
+        where: {
+          startedGameId: startedGame.id,
+          roundsOf,
+          selection2Id: Not(IsNull()),
+        },
+        order: { id: 'ASC' },
+        relations: ['selection1', 'selection2'],
+      });
+  
       return plainToInstance(
         StartedGameResponseDto,
-        { startedGame, match, matchNumberInRound: 1 },
+        {
+          startedGame,
+          match: firstMatch,
+          matchNumberInRound: byesCount + 1,
+        },
         { excludeExtraneousValues: true },
       );
     } catch (error) {
@@ -113,7 +148,8 @@ export class StartedGamesService {
       await queryRunner.release();
     }
   }
-
+  
+  
   async createPick(createPickDto: CreatePickDto) {
     const { startedGameId, matchId, pickedSelectionId } = createPickDto;
 
@@ -219,7 +255,15 @@ export class StartedGamesService {
         );
 
         // ✅ Save final results
-        await this.selectionsRepository.save([winnerSelection, loserSelection]);
+        await this.selectionsRepository.update(winnerSelection.id, {
+          wins: winnerSelection.wins,
+          finalWins: winnerSelection.finalWins,
+        });
+        
+        await this.selectionsRepository.update(loserSelection.id, {
+          losses: loserSelection.losses,
+          finalLosses: loserSelection.finalLosses,
+        });
 
         // Save number of finished games
         await queryRunner.manager.query(
@@ -308,7 +352,7 @@ export class StartedGamesService {
       await queryRunner.release();
     }
   }
-
+  
   fisherYatesShuffle(array: any[]) {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -376,18 +420,22 @@ export class StartedGamesService {
 
     // Find the latest match for this started game
     const latestMatch = await this.matchesRepository.findOne({
-      where: { startedGameId },
+      where: {
+        startedGameId,
+        selection2Id: Not(IsNull()), // skip bye matches
+      },
       order: { createdAt: 'DESC' },
       relations: ['selection1', 'selection2'],
     });
-
-    if (!latestMatch) {
-      throw new NotFoundException('No matches found for this started game');
-    }
+    
 
     // Get the count of matches in the current round
     const matchesCount = await this.matchesRepository.count({
-      where: { startedGameId, roundsOf: latestMatch.roundsOf },
+      where: {
+        startedGameId,
+        roundsOf: latestMatch.roundsOf,
+        selection2Id: Not(IsNull()), // only real matches, not byes
+      },
     });
 
     // Return a response similar to createPick but without creating a new match
@@ -400,5 +448,9 @@ export class StartedGamesService {
       },
       { excludeExtraneousValues: true },
     );
+  }
+
+  getNextPowerOfTwo(n: number): number {
+    return Math.pow(2, Math.ceil(Math.log2(n)));
   }
 }
