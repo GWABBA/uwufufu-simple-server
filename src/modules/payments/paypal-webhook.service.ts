@@ -178,7 +178,8 @@ export class PaypalWebhookService {
           });
 
           // 3. Update user's subscription dates
-          const currentEndDate = existingPayment.user.subscriptionEndDate || new Date();
+          const currentEndDate =
+            existingPayment.user.subscriptionEndDate || new Date();
           const nextMonth = new Date(currentEndDate);
           nextMonth.setMonth(nextMonth.getMonth() + 1);
 

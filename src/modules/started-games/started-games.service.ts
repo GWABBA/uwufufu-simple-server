@@ -10,7 +10,7 @@ import { CreatePickDto } from './dtos/create-pick.dto';
 import { MatchesRepository } from './matches.repository';
 import { plainToInstance } from 'class-transformer';
 import { StartedGameResponseDto } from './dtos/started-game-response.dto';
-import { DataSource, In, IsNull, LessThanOrEqual, Not } from 'typeorm';
+import { DataSource, In, IsNull, Not } from 'typeorm';
 import { Match } from './entities/match.entity';
 import { AddResultImage } from './dtos/add-result-image-dto';
 import { GetStartedGameParamsDto } from './dtos/get-started-game-params.dto';
@@ -19,8 +19,6 @@ import { UserFromToken } from '../auth/types/auth-request.interface';
 import { GetStartedGamesQueryDto } from './dtos/get-started-games-query.dto';
 import { StartedGameWithGameDto } from './dtos/started-game-with-game.dto';
 import { GetStartedGameWithoutSlugParamsDto } from './dtos/get-started-game-without-slug-params.dto';
-import { StartedGame } from './entities/started-game.entity';
-import { StartedGameStatus } from 'src/core/enums/startedGameStatus.enum';
 
 @Injectable()
 export class StartedGamesService {
@@ -31,10 +29,13 @@ export class StartedGamesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async getStartedGames(user: UserFromToken, query: GetStartedGamesQueryDto): Promise<StartedGameWithGameDto[]> {
+  async getStartedGames(
+    user: UserFromToken,
+    query: GetStartedGamesQueryDto,
+  ): Promise<StartedGameWithGameDto[]> {
     const { page = 1, perPage = 10 } = query;
     const skip = (page - 1) * perPage;
-    
+
     const startedGames = await this.startedGamesRepository.find({
       where: { user: { id: user.userId } },
       order: { createdAt: 'DESC' },
@@ -43,8 +44,10 @@ export class StartedGamesService {
       take: perPage,
       withDeleted: true,
     });
-    
-    return plainToInstance(StartedGameWithGameDto, startedGames, { excludeExtraneousValues: true });
+
+    return plainToInstance(StartedGameWithGameDto, startedGames, {
+      excludeExtraneousValues: true,
+    });
   }
 
   async createStartedGame(
@@ -55,63 +58,67 @@ export class StartedGamesService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
-  
+
     try {
       const gameResult = await queryRunner.manager.query(
         `SELECT * FROM games WHERE "id" = $1 AND "visibility" <> 'IS_CLOSED'`,
         [gameId],
       );
       const game = gameResult[0];
-  
+
       await queryRunner.manager.query(
         `UPDATE games SET "plays" = "plays" + 1 WHERE "id" = $1`,
         [gameId],
       );
-  
+
       const startedGameInsert = await queryRunner.manager.query(
         `INSERT INTO started_games ("gameId", "roundsOf", "userId", "status") 
          VALUES ($1, $2, $3, 'IN_PROGRESS') RETURNING *`,
         [game.id, roundsOf, user ? user.userId : null],
       );
       const startedGame = startedGameInsert[0];
-  
+
       const selections = await queryRunner.manager.query(
         `SELECT * FROM selections WHERE "gameId" = $1 AND "deletedAt" IS NULL`,
         [gameId],
       );
-  
+
       if (selections.length < 2) {
         throw new Error('Not enough selections to start a match.');
       }
-  
+
       this.fisherYatesShuffle(selections);
-  
+
       const total = selections.length;
       const nextPower = this.getNextPowerOfTwo(total);
-      const byesNeeded = nextPower - total;
-  
-      const byeSelections = selections.slice(0, byesNeeded);
-      const firstRoundCandidates = selections.slice(byesNeeded);
-
+      let byeSelections = [];
+      let firstRoundCandidates = selections;
       let byesCount = 0;
-  
-      // Create bye matches
-      for (const selection of byeSelections) {
-        await queryRunner.manager.insert(Match, {
-          startedGameId: startedGame.id,
-          roundsOf,
-          selection1Id: selection.id,
-          selection2Id: null,
-          winnerId: selection.id,
-        });
-        byesCount++;
+
+      // Only assign byes if roundsOf is enough to support next power-of-two format
+      if (roundsOf >= nextPower) {
+        const byesNeeded = nextPower - total;
+        byeSelections = selections.slice(0, byesNeeded);
+        firstRoundCandidates = selections.slice(byesNeeded);
+
+        // Create bye matches
+        for (const selection of byeSelections) {
+          await queryRunner.manager.insert(Match, {
+            startedGameId: startedGame.id,
+            roundsOf,
+            selection1Id: selection.id,
+            selection2Id: null,
+            winnerId: selection.id,
+          });
+          byesCount++;
+        }
       }
-  
+
       // Create only the first playable match
       if (firstRoundCandidates.length >= 2) {
         const sel1 = firstRoundCandidates[0];
         const sel2 = firstRoundCandidates[1];
-  
+
         await queryRunner.manager.insert(Match, {
           startedGameId: startedGame.id,
           roundsOf,
@@ -119,9 +126,9 @@ export class StartedGamesService {
           selection2Id: sel2.id,
         });
       }
-  
+
       await queryRunner.commitTransaction();
-  
+
       const firstMatch = await this.matchesRepository.findOne({
         where: {
           startedGameId: startedGame.id,
@@ -131,7 +138,7 @@ export class StartedGamesService {
         order: { id: 'ASC' },
         relations: ['selection1', 'selection2'],
       });
-  
+
       return plainToInstance(
         StartedGameResponseDto,
         {
@@ -148,8 +155,7 @@ export class StartedGamesService {
       await queryRunner.release();
     }
   }
-  
-  
+
   async createPick(createPickDto: CreatePickDto) {
     const { startedGameId, matchId, pickedSelectionId } = createPickDto;
 
@@ -259,7 +265,7 @@ export class StartedGamesService {
           wins: winnerSelection.wins,
           finalWins: winnerSelection.finalWins,
         });
-        
+
         await this.selectionsRepository.update(loserSelection.id, {
           losses: loserSelection.losses,
           finalLosses: loserSelection.finalLosses,
@@ -352,7 +358,7 @@ export class StartedGamesService {
       await queryRunner.release();
     }
   }
-  
+
   fisherYatesShuffle(array: any[]) {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -400,7 +406,10 @@ export class StartedGamesService {
     });
   }
 
-  async getStartedGameById(params: GetStartedGameWithoutSlugParamsDto, user: UserFromToken) {
+  async getStartedGameById(
+    params: GetStartedGameWithoutSlugParamsDto,
+    user: UserFromToken,
+  ) {
     const { id: startedGameId } = params;
 
     // Find the started game with its game relation
@@ -427,7 +436,6 @@ export class StartedGamesService {
       order: { createdAt: 'DESC' },
       relations: ['selection1', 'selection2'],
     });
-    
 
     // Get the count of matches in the current round
     const matchesCount = await this.matchesRepository.count({
