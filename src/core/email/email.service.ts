@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto';
 @Injectable()
 export class EmailService {
   private client: postmark.ServerClient;
+  private blockDomains = ['tiscali.it'];
 
   constructor(
     private readonly configService: ConfigService,
@@ -20,6 +21,13 @@ export class EmailService {
   }
 
   async sendEmailConfirmationEmail(to: string) {
+    // Check if the email is blocked
+    if (this.isBlockedDomain(to)) {
+      throw new BadRequestException(
+        'This email domain is blocked from receiving confirmation emails. Contact support if you need assistance.',
+      );
+    }
+
     // check if user isVerified
     const user = await this.usersRepository.findOneBy({
       email: to,
@@ -64,6 +72,12 @@ export class EmailService {
   }
 
   async sendPasswordResetEmail(to: string, token: string) {
+    // Check if the email is blocked
+    if (this.isBlockedDomain(to)) {
+      throw new BadRequestException(
+        'This email domain is blocked from receiving password reset emails. Contact support if you need assistance.',
+      );
+    }
     const subject = 'Password reset request';
     const passwordResetUrl = `${this.configService.get<string>(
       'app.frontUrl',
@@ -90,5 +104,10 @@ export class EmailService {
       Subject: subject,
       TextBody: body,
     });
+  }
+
+  private isBlockedDomain(email: string): boolean {
+    const domain = email.split('@')[1]?.toLowerCase();
+    return this.blockDomains.includes(domain);
   }
 }
