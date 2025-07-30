@@ -24,6 +24,9 @@ export class UserResponseDto {
   subscriptionEndDate: Date;
 
   @Expose()
+  isAdmin: boolean;
+
+  @Expose()
   createdAt: Date;
 
   @Expose()

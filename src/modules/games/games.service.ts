@@ -1,3 +1,4 @@
+import { UserFromToken } from './../auth/types/auth-request.interface';
 import { GetGamesQueryDto } from './dtos/get-games-query.dto';
 import { UsersRepository } from './../users/users.repository';
 import { plainToInstance } from 'class-transformer';
@@ -9,7 +10,6 @@ import {
 } from './dtos/get-game-params.dto';
 import { GameResponseDto } from './dtos/game-response.dto';
 import { CreateGameBodyDto } from './dtos/create-game-body-dto';
-import { UserFromToken } from '../auth/types/auth-request.interface';
 import { generateUniqueSlug } from 'src/core/utils/slug.util';
 import { CategoriesRepository } from '../categories/categories.repository';
 import { GetMyGamesQueryDto } from './dtos/get-my-games-query.dto';
@@ -19,6 +19,7 @@ import { Visibility } from 'src/core/enums/visibility.enum';
 import { SelectionsRepository } from '../selections/selections.repository';
 import { RedisService } from 'src/core/redis/redis.service';
 import { UpdateGameBodyDto } from './dtos/update-game-body-dto';
+import { MessageResponseDto } from 'src/core/dtos/message-response.dto';
 
 @Injectable()
 export class GamesService {
@@ -283,7 +284,9 @@ export class GamesService {
   ): Promise<GameResponseDto> {
     const { id } = getGameParamsDto;
 
-    const game = await this.gamesRepository.findOne({
+    let game = null;
+
+    game = await this.gamesRepository.findOne({
       where: {
         id: Number(id),
         user: { id: userFromToken.userId }, // ✅ Correct way to reference relations
@@ -291,6 +294,25 @@ export class GamesService {
       },
       relations: ['user', 'category'], // ✅ Load necessary relations
     });
+
+    if (!game) {
+      const user = await this.usersRepository.findOne({
+        where: { id: userFromToken.userId },
+      });
+      // if user is not found or user is found but isAdmin is false, throw an error
+      if (!user || !user.isAdmin) {
+        throw new NotFoundException('Game not found');
+      }
+
+      // if user is admin, fetch the game without user relation
+      game = await this.gamesRepository.findOne({
+        where: {
+          id: Number(id),
+          deletedAt: null,
+        },
+        relations: ['user', 'category'], // ✅ Load necessary relations
+      });
+    }
 
     if (!game) {
       throw new NotFoundException('Game not found');
@@ -365,13 +387,33 @@ export class GamesService {
   async deleteGame(params: GetGameParamsDto, user: UserFromToken) {
     const { id } = params;
 
-    const game = await this.gamesRepository.findOne({
+    let game = null;
+
+    game = await this.gamesRepository.findOne({
       where: {
         id: Number(id),
         user: { id: user.userId },
         deletedAt: null,
       },
     });
+
+    if (!game) {
+      const userEntity = await this.usersRepository.findOne({
+        where: { id: user.userId },
+      });
+
+      if (!userEntity || !userEntity.isAdmin) {
+        throw new NotFoundException('Game not found');
+      }
+
+      // if user is admin, fetch the game without user relation
+      game = await this.gamesRepository.findOne({
+        where: {
+          id: Number(id),
+          deletedAt: null,
+        },
+      });
+    }
 
     if (!game) {
       throw new NotFoundException('Game not found');
@@ -385,5 +427,43 @@ export class GamesService {
     await this.redisService.deleteKey(cacheKey); // ✅ Delete cache after deletion
 
     return { message: 'Game deleted successfully' };
+  }
+
+  async toggleNsfw(params: GetGameParamsDto, userFromToken: UserFromToken) {
+    const { id } = params;
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userFromToken.userId, isAdmin: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found or not authorized');
+    }
+
+    const game = await this.gamesRepository.findOne({
+      where: {
+        id: Number(id),
+        deletedAt: null,
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    // Toggle NSFW status
+    game.isNsfw = !game.isNsfw;
+    game.nsfwLockedByAdmin = game.isNsfw; // Lock NSFW status by admin
+    await this.gamesRepository.save(game);
+
+    return plainToInstance(
+      MessageResponseDto,
+      {
+        message: `Game NSFW status toggled to ${game.isNsfw ? 'enabled' : 'disabled'}`,
+      },
+      {
+        excludeExtraneousValues: true,
+      },
+    );
   }
 }
