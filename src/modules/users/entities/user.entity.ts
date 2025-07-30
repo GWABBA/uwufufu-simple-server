@@ -47,6 +47,9 @@ export class User {
   @Column({ nullable: true })
   subscriptionEndDate: Date;
 
+  @Column({ default: false })
+  isAdmin: boolean;
+
   @OneToMany(() => Payment, (payment) => payment.user)
   payments: Payment[];
 

@@ -23,6 +23,7 @@ import { GetMyGamesQueryDto } from './dtos/get-my-games-query.dto';
 import { GamesListResponseDto } from './dtos/games-list-response.dto';
 import { GetGamesQueryDto } from './dtos/get-games-query.dto';
 import { UpdateGameBodyDto } from './dtos/update-game-body-dto';
+import { MessageResponseDto } from 'src/core/dtos/message-response.dto';
 
 @Controller('games')
 export class GamesController {
@@ -86,5 +87,15 @@ export class GamesController {
   async deleteGame(@Req() req: AuthRequest, @Param() params: GetGameParamsDto) {
     const user = req.user;
     return this.gamesService.deleteGame(params, user);
+  }
+
+  @Put('/:id/nsfw')
+  @UseGuards(JwtAuthGuard)
+  async toggleNsfw(
+    @Req() req: AuthRequest,
+    @Param() params: GetGameParamsDto,
+  ): Promise<MessageResponseDto> {
+    const user = req.user;
+    return this.gamesService.toggleNsfw(params, user);
   }
 }

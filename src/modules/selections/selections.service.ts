@@ -11,12 +11,14 @@ import { UpdateSelectionBodyDto } from './dtos/update-selection-body.dto';
 import { GetSelectionsParams } from './dtos/get-selections-params.dto';
 import { RedisService } from 'src/core/redis/redis.service';
 import { ILike } from 'typeorm';
+import { UsersRepository } from '../users/users.repository';
 
 @Injectable()
 export class SelectionsService {
   constructor(
     private readonly selectionsRepository: SelectionsRepository,
     private readonly gamesRepository: GamesRepository,
+    private readonly usersRepository: UsersRepository,
     private readonly redisService: RedisService,
   ) {}
 
@@ -266,13 +268,30 @@ export class SelectionsService {
       videoUrl,
     } = body;
 
-    const game = await this.gamesRepository.findOne({
+    let game = null;
+
+    game = await this.gamesRepository.findOne({
       where: {
         id: gameId,
         user: { id: userFromToken.userId },
         deletedAt: null,
       },
     });
+
+    if (!game) {
+      const userEntity = await this.usersRepository.findOne({
+        where: { id: userFromToken.userId },
+      });
+
+      if (!userEntity || !userEntity.isAdmin) {
+        throw new NotFoundException('Game not found');
+      }
+
+      game = await this.gamesRepository.findOne({
+        where: { id: gameId, deletedAt: null },
+      });
+    }
+
     if (!game) {
       throw new Error('Game not found');
     }
@@ -318,9 +337,26 @@ export class SelectionsService {
       throw new NotFoundException('Selection not found');
     }
 
-    const game = await this.gamesRepository.findOne({
+    let game = null;
+
+    game = await this.gamesRepository.findOne({
       where: { id: selection.game.id, user: { id: userFromToken.userId } },
     });
+
+    if (!game) {
+      const userEntity = await this.usersRepository.findOne({
+        where: { id: userFromToken.userId },
+      });
+
+      if (!userEntity || !userEntity.isAdmin) {
+        throw new NotFoundException('Game not found');
+      }
+
+      game = await this.gamesRepository.findOne({
+        where: { id: selection.game.id, deletedAt: null },
+      });
+    }
+
     if (!game) {
       throw new NotFoundException('Game not found');
     }
