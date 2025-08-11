@@ -318,6 +318,16 @@ export class GamesService {
       throw new NotFoundException('Game not found');
     }
 
+    // add selections count
+    const selectionsCount = await this.selectionsRepository.count({
+      where: {
+        game: { id: game.id },
+        deletedAt: null,
+      },
+    });
+
+    game.selectionCount = selectionsCount;
+
     return plainToInstance(GameResponseDto, game, {
       excludeExtraneousValues: true,
     });
