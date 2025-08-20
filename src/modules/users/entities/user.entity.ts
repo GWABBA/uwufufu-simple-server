@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Game } from '../../games/entities/game.entity';
 import { Payment } from 'src/modules/payments/entities/payment.entity';
+import { StripeCustomer } from '../../stripe/entities/stripe-customer.entity';
 
 @Entity('users')
 export class User {
@@ -49,6 +50,11 @@ export class User {
 
   @Column({ default: false })
   isAdmin: boolean;
+
+  // src/modules/users/entities/user.entity.ts
+
+  @OneToMany(() => StripeCustomer, (c) => c.user)
+  stripeCustomers: StripeCustomer[];
 
   @OneToMany(() => Payment, (payment) => payment.user)
   payments: Payment[];

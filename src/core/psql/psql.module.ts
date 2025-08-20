@@ -1,21 +1,8 @@
-import { User } from 'src/modules/users/entities/user.entity';
-import { Game } from 'src/modules/games/entities/game.entity';
-import { Selection } from 'src/modules/selections/entities/selection.entity';
-
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Category } from 'src/modules/categories/entities/category.entity';
-import { EmailToken } from 'src/modules/email-tokens/entities/email-token.entity';
-import { PasswordReset } from 'src/modules/password-reset/entities/password-reset.entity';
-import { StartedGame } from 'src/modules/started-games/entities/started-game.entity';
-import { SubscriptionPlan } from 'src/modules/subscription-plans/entities/subscription-plan.entity';
-import { Match } from 'src/modules/started-games/entities/match.entity';
-import AdminUser from 'nestjs-admin/dist/src/adminUser/adminUser.entity';
-import { Payment } from 'src/modules/payments/entities/payment.entity';
-import { Report } from 'src/modules/reports/entities/report.entity';
 
 @Module({
   imports: [
@@ -42,6 +29,7 @@ import { Report } from 'src/modules/reports/entities/report.entity';
         console.log('   Host:', configService.get<string>('psql.host'));
         console.log('   Port:', configService.get<number>('psql.port'));
         console.log('   Username:', configService.get<string>('psql.userName'));
+        console.log('   Synchronize:', configService.get<string>('psql.sync'));
         console.log('   SSL:', sslCert ? 'Enabled' : 'Disabled');
 
         return {
@@ -51,21 +39,22 @@ import { Report } from 'src/modules/reports/entities/report.entity';
           username: configService.get<string>('psql.userName'),
           password: configService.get<string>('psql.password'),
           database: configService.get<string>('psql.databaseName'),
-          entities: [
-            Game,
-            User,
-            Selection,
-            Category,
-            EmailToken,
-            PasswordReset,
-            Match,
-            StartedGame,
-            SubscriptionPlan,
-            AdminUser,
-            Payment,
-            Report,
-          ],
-          synchronize: configService.get<string>('app.env') !== 'production', // ❌ Set false in production
+          // entities: [
+          //   Game,
+          //   User,
+          //   Selection,
+          //   Category,
+          //   EmailToken,
+          //   PasswordReset,
+          //   Match,
+          //   StartedGame,
+          //   SubscriptionPlan,
+          //   AdminUser,
+          //   Payment,
+          //   Report,
+          // ],
+          autoLoadEntities: true,
+          synchronize: configService.get<boolean>('psql.sync'),
           ssl: configService.get<string>('psql.ssl')
             ? sslCert
               ? { rejectUnauthorized: true, ca: sslCert }
