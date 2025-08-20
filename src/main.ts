@@ -28,6 +28,7 @@ async function bootstrap() {
   const app = await NestFactory.create(
     AppModule,
     new ExpressAdapter(rawExpressApp),
+    { rawBody: true },
   );
 
   app.useGlobalPipes(
