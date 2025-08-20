@@ -10,13 +10,31 @@ export class PaymentRepository extends Repository<Payment> {
 
   async createPayment(data: Partial<Payment>): Promise<Payment> {
     const payment = this.create(data);
-    return await this.save(payment);
+    return this.save(payment);
   }
 
-  async updatePaymentStatus(
-    paypalOrderId: string,
+  // ✅ New: update by subscriptionId (use this for lifecycle status changes)
+  async updatePaymentStatusBySubscriptionId(
+    subscriptionId: string,
     status: string,
   ): Promise<void> {
-    await this.update({ paypalOrderId }, { status });
+    await this.update({ subscriptionId }, { status });
+  }
+
+  // ✅ Optional: update by saleId (rare, but handy if you ever need it)
+  async updatePaymentStatusBySaleId(
+    saleId: string,
+    status: string,
+  ): Promise<void> {
+    await this.update({ saleId }, { status });
+  }
+
+  // ✅ Optional helpers (nice to have)
+  async findBySubscriptionId(subscriptionId: string): Promise<Payment | null> {
+    return this.findOne({ where: { subscriptionId } });
+  }
+
+  async findBySaleId(saleId: string): Promise<Payment | null> {
+    return this.findOne({ where: { saleId } });
   }
 }

@@ -9,7 +9,7 @@ import { UsersRepository } from '../users/users.repository';
 import { UserFromToken } from '../auth/types/auth-request.interface';
 import { plainToInstance } from 'class-transformer';
 import { PaymentResponseDto } from './dtos/payment-response.dto';
-import { IsNull, MoreThan } from 'typeorm';
+import { IsNull, MoreThan, Not } from 'typeorm';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 
@@ -112,30 +112,29 @@ export class PaymentsService {
     }
   }
 
+  // replace your cancelSubscription with this
   async cancelSubscription(userFromToken: UserFromToken) {
-    // 🔍 Ensure the user exists
     const userFromDb = await this.usersRepository.findOne({
       where: { id: userFromToken.userId, deletedAt: IsNull() },
     });
+    if (!userFromDb) throw new NotFoundException('User not found');
 
-    if (!userFromDb) {
-      throw new NotFoundException('User not found');
-    }
-
-    // 🔍 Find the latest ACTIVE subscription
+    // ⚠️ CHANGED: require a row that has a subscriptionId
     const latestSubscription = await this.paymentRepository.findOne({
       where: {
         user: { id: userFromDb.id },
         status: 'ACTIVE',
+        subscriptionId: Not(IsNull()),
       },
       order: { createdAt: 'DESC' },
     });
-
     if (!latestSubscription) {
-      throw new NotFoundException('No active subscription found.');
+      throw new NotFoundException(
+        'No active subscription found. Please contact support.',
+      );
     }
 
-    const subscriptionId = latestSubscription.paypalOrderId; // ✅ Retrieve PayPal subscription ID
+    const subscriptionId = latestSubscription.subscriptionId!; // <-- CHANGED
     const accessToken = await this.getAccessToken();
 
     try {

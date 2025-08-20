@@ -6,15 +6,31 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 
+@Index('ix_payments_subscriptionId_notnull', ['subscriptionId'], {
+  where: '"subscriptionId" IS NOT NULL',
+})
+@Index('ix_payments_saleId_notnull', ['saleId'], {
+  where: '"saleId" IS NOT NULL',
+})
+@Index('ix_payments_user_status_createdAt', ['user', 'status', 'createdAt'])
 @Entity('payments')
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ nullable: false })
-  paypalOrderId: string;
+  // ✅ keep temporarily if you still backfill from it; drop later
+  @Column({ nullable: true })
+  paypalOrderId?: string;
+
+  // ✅ split IDs
+  @Column({ nullable: true })
+  subscriptionId?: string; // e.g., I-XXXX...
+
+  @Column({ nullable: true })
+  saleId?: string; // e.g., PAYID-..., 9VY...
 
   @Column({ nullable: false })
   status: string;
@@ -22,14 +38,15 @@ export class Payment {
   @Column({ nullable: true })
   payerEmail?: string;
 
-  @Column({ nullable: true })
+  // ✅ money should be numeric in DB
+  @Column({ type: 'numeric', nullable: true })
   amount?: number;
 
   @Column({ nullable: true })
   currency?: string;
 
   @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' }) // Creates `userId` as a foreign key in `payments` table
+  @JoinColumn({ name: 'userId' }) // creates userId FK column
   user: User;
 
   @CreateDateColumn()
