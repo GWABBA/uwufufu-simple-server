@@ -23,25 +23,31 @@ export class PaypalWebhookService {
     switch (eventType) {
       // ✅ Handle New Subscription Activation
       case 'BILLING.SUBSCRIPTION.ACTIVATED': {
-        const subscriptionId: string = resource.id; // subscription id (I-...)
+        const subscriptionId: string = resource.id; // I-...
         const paypalEmail = resource?.subscriber?.email_address || null;
-        const userId = resource?.custom_id || null;
+        const customId = resource?.custom_id ?? null;
 
-        if (!userId) {
-          console.warn('⚠️ No user ID found in webhook');
-          return;
+        if (!customId) {
+          console.warn('⚠️ No user ID (custom_id) found in webhook');
+          break;
         }
 
+        // Normalize id type (number vs uuid)
+        const normalizedUserId =
+          typeof customId === 'string' && /^\d+$/.test(customId)
+            ? Number(customId)
+            : String(customId);
+
         const user = await this.usersRepository.findOne({
-          where: { id: userId, deletedAt: IsNull() },
+          where: { id: normalizedUserId as any, deletedAt: IsNull() },
         });
 
         if (!user) {
-          console.warn(`⚠️ User not found for ID: ${userId}`);
-          return;
+          console.warn(`⚠️ User not found for ID: ${customId}`);
+          break;
         }
 
-        // Check by subscriptionId (no paypalOrderId anymore)
+        // Dedupe by subscriptionId
         const existingSubscription = await this.paymentRepository.findOne({
           where: { subscriptionId },
         });
@@ -49,49 +55,54 @@ export class PaypalWebhookService {
           console.log(
             `⚠️ Subscription ${subscriptionId} already exists. Skipping duplicate.`,
           );
-          return;
+          break;
         }
 
-        // Store initial ACTIVE row linked to the subscription
+        const amount = this.toAmount(
+          resource?.billing_info?.last_payment?.amount,
+        );
+
+        // Create initial ACTIVE payment row (linked to subscription)
         await this.paymentRepository.createPayment({
           user,
           subscriptionId,
           status: 'ACTIVE',
           payerEmail: paypalEmail,
-          amount: resource?.billing_info?.last_payment?.amount?.value
-            ? parseFloat(resource.billing_info.last_payment.amount.value)
-            : null,
+          amount,
           currency:
             resource?.billing_info?.last_payment?.amount?.currency_code || null,
         });
 
-        // 🔍 Trial logic (unchanged)
+        // Trial detection
         let trialDays = 0;
-        if (resource.billing_info?.cycle_executions?.length) {
-          const trialCycle = resource.billing_info.cycle_executions.find(
-            (cycle) => cycle.tenure_type === 'TRIAL',
+        const cycles = resource?.billing_info?.cycle_executions ?? [];
+        if (Array.isArray(cycles) && cycles.length) {
+          const trialCycle = cycles.find(
+            (c: any) => c?.tenure_type === 'TRIAL',
           );
-          if (trialCycle) {
-            trialDays = trialCycle.total_cycles;
-          }
+          if (trialCycle) trialDays = Number(trialCycle.total_cycles || 0);
         }
 
+        // Compute subscription window
         const startDate = new Date();
-        const endDate = new Date();
+        const endDate = new Date(startDate);
         if (trialDays > 0) {
+          // Your business rule: 7 days free trial
           endDate.setDate(endDate.getDate() + 7);
         } else {
           endDate.setMonth(endDate.getMonth() + 1);
         }
 
-        await this.usersRepository.update(user.id, {
+        // IMPORTANT: use save (not update) to avoid silent no-op / type issues
+        await this.usersRepository.save({
+          id: user.id, // keep the PK from the loaded entity
           subscriptionStartDate: startDate,
           subscriptionEndDate: endDate,
           tier: 'plus',
         });
 
         console.log(
-          `✅ Subscription activated for user: ${user.id} | Trial: ${trialDays > 0 ? 'Yes (7 days)' : 'No'} | End: ${endDate.toISOString()}`,
+          `✅ Subscription activated for user ${user.id} | Trial: ${trialDays > 0 ? 'Yes (7 days)' : 'No'} | End: ${endDate.toISOString()}`,
         );
         break;
       }
@@ -99,8 +110,8 @@ export class PaypalWebhookService {
       // ✅ Handle Subscription Renewal Payments
       case 'PAYMENT.SALE.COMPLETED': {
         const saleId: string = resource.id; // sale/payment id
-        const amount = parseFloat(resource.amount.value);
-        const currency = resource.amount.currency_code;
+        // const amount = parseFloat(resource.amount.value);
+        // const currency = resource.amount.currency_code;
         const subscriptionId: string | undefined =
           resource.billing_agreement_id; // link to subscription
         const paypalEmail = resource?.payer?.email_address || null;
@@ -171,6 +182,9 @@ export class PaypalWebhookService {
             subscriptionId,
             'COMPLETED',
           );
+
+          const amount = this.toAmount(resource?.amount);
+          const currency = resource?.amount?.currency_code ?? null;
 
           // 2) Create a new row representing this charge
           await this.paymentRepository.createPayment({
@@ -272,5 +286,14 @@ export class PaypalWebhookService {
       default:
         console.log(`Unhandled event: ${eventType}`);
     }
+  }
+
+  private toAmount(input: any): number | null {
+    // Accept either { value: "12.34", currency_code: "USD" } or a plain string/number
+    const raw =
+      typeof input === 'object' && input !== null ? input.value : input;
+    if (raw === undefined || raw === null || raw === '') return null;
+    const n = typeof raw === 'number' ? raw : parseFloat(raw);
+    return Number.isFinite(n) ? n : null;
   }
 }
