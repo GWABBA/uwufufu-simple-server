@@ -24,15 +24,20 @@ import { AuthEmailVerificationDto } from './dtos/auth-email-verification.dto';
 import { EmailTokensRepository } from '../email-tokens/email-tokens.repository';
 import { IsNull, Not } from 'typeorm';
 import { ChangePasswordBodyDto } from './dtos/change-password-body.dto';
+import Stripe from 'stripe';
 
 @Injectable()
 export class AuthService {
+  private readonly stripe: Stripe;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersRepository: UsersRepository,
     private readonly emailService: EmailService,
     private readonly emailTokensRepository: EmailTokensRepository,
-  ) {}
+  ) {
+    this.stripe = new Stripe(process.env.STRIPE_SECRET!);
+  }
 
   async register(
     authRegisterBodyDto: AuthRegisterBodyDto,
@@ -241,5 +246,92 @@ export class AuthService {
     return plainToInstance(MessageResponseDto, {
       message: 'Email verified',
     });
+  }
+
+  async cancelSubscription(user: UserFromToken): Promise<MessageResponseDto> {
+    const userFromDb = await this.usersRepository.findOne({
+      where: { id: user.userId },
+      relations: ['stripeCustomers', 'payments'],
+    });
+
+    if (!userFromDb) {
+      throw new NotFoundException('User not found');
+    }
+
+    let canceled = false;
+
+    // ✅ Try Stripe first
+    if (userFromDb.stripeCustomers?.length) {
+      for (const customer of userFromDb.stripeCustomers) {
+        const activeSubs = await this.stripe.subscriptions.list({
+          customer: customer.stripeCustomerId,
+          status: 'active',
+          limit: 10,
+        });
+
+        if (activeSubs.data.length > 0) {
+          for (const sub of activeSubs.data) {
+            await this.stripe.subscriptions.update(sub.id, {
+              cancel_at_period_end: true,
+            });
+          }
+          canceled = true;
+          break;
+        }
+      }
+    }
+
+    // ✅ Try PayPal if not found in Stripe
+    if (!canceled) {
+      const activePaypal = userFromDb.payments.find(
+        (p) => p.subscriptionId && p.status === 'ACTIVE',
+      );
+      if (activePaypal) {
+        const paypalRes = await fetch(
+          `https://api-m.paypal.com/v1/billing/subscriptions/${activePaypal.subscriptionId}/cancel`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${await this.getPaypalAccessToken()}`,
+            },
+            body: JSON.stringify({ reason: 'User requested cancellation' }),
+          },
+        );
+
+        if (!paypalRes.ok) {
+          throw new BadRequestException('Failed to cancel PayPal subscription');
+        }
+
+        canceled = true;
+      }
+    }
+
+    if (!canceled) {
+      throw new BadRequestException(
+        'No active subscription found for this user',
+      );
+    }
+
+    return { message: 'Subscription will be cancelled at period end' };
+  }
+
+  private async getPaypalAccessToken(): Promise<string> {
+    const res = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
+      method: 'POST',
+      headers: {
+        Authorization:
+          'Basic ' +
+          Buffer.from(
+            process.env.PAYPAL_CLIENT_ID +
+              ':' +
+              process.env.PAYPAL_CLIENT_SECRET,
+          ).toString('base64'),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+    });
+    const data = await res.json();
+    return data.access_token;
   }
 }

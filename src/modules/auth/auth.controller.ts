@@ -87,4 +87,13 @@ export class AuthController {
     const user = req.user;
     return this.authService.verifyEmail(user, authEmailVerificationDto);
   }
+
+  @Post('/cancel-subscription')
+  @UseGuards(JwtAuthGuard)
+  async cancelSubscription(
+    @Req() req: AuthRequest,
+  ): Promise<MessageResponseDto> {
+    const user = req.user;
+    return this.authService.cancelSubscription(user);
+  }
 }
