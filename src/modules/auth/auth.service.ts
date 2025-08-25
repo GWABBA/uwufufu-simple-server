@@ -25,6 +25,7 @@ import { EmailTokensRepository } from '../email-tokens/email-tokens.repository';
 import { IsNull, Not } from 'typeorm';
 import { ChangePasswordBodyDto } from './dtos/change-password-body.dto';
 import Stripe from 'stripe';
+import { ActiveSubscriptionResponseDto } from './dtos/active-subscription-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -333,5 +334,88 @@ export class AuthService {
     });
     const data = await res.json();
     return data.access_token;
+  }
+
+  async getActiveSubscription(
+    user: UserFromToken,
+  ): Promise<ActiveSubscriptionResponseDto> {
+    const userFromDb = await this.usersRepository.findOne({
+      where: { id: user.userId },
+      relations: [
+        'stripeCustomers',
+        'stripeCustomers.subscriptions',
+        'payments',
+      ],
+    });
+
+    if (!userFromDb) throw new NotFoundException('User not found');
+
+    console.log(userFromDb);
+
+    // Stripe path: check subscriptions already in DB
+    for (const customer of userFromDb.stripeCustomers ?? []) {
+      const activeSub = customer.subscriptions.find(
+        (s) => s.status === 'active' || s.status === 'trialing',
+      );
+      if (activeSub) {
+        return {
+          provider: 'stripe',
+          subscriptionId: activeSub.stripeSubscriptionId,
+          customerId: customer.stripeCustomerId,
+          status: activeSub.status,
+          cancelAtPeriodEnd: activeSub.cancelAtPeriodEnd,
+          priceId: activeSub.priceId,
+          currentPeriodStart: activeSub.currentPeriodStart,
+          currentPeriodEnd: activeSub.currentPeriodEnd,
+        };
+      }
+    }
+
+    // PayPal path: check DB payments
+    const paypalPayment = userFromDb.payments?.find(
+      (p) => p.subscriptionId && p.status?.toUpperCase() === 'ACTIVE',
+    );
+    if (paypalPayment) {
+      return {
+        provider: 'paypal',
+        subscriptionId: paypalPayment.subscriptionId,
+        status: paypalPayment.status,
+        customerId: null,
+        cancelAtPeriodEnd: null, // if you don’t track this in DB
+        priceId: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+      };
+    }
+
+    // Default: nothing
+    return {
+      provider: null,
+      subscriptionId: null,
+      status: null,
+      cancelAtPeriodEnd: null,
+      priceId: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+    };
+  }
+
+  private async fetchPaypalSubscription(subId: string): Promise<any | null> {
+    try {
+      const token = await this.getPaypalAccessToken();
+      const res = await fetch(
+        `https://api-m.paypal.com/v1/billing/subscriptions/${subId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 }

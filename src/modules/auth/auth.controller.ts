@@ -96,4 +96,11 @@ export class AuthController {
     const user = req.user;
     return this.authService.cancelSubscription(user);
   }
+
+  @Get('/subscription')
+  @UseGuards(JwtAuthGuard)
+  async getActiveSubscription(@Req() req: AuthRequest) {
+    const user = req.user;
+    return this.authService.getActiveSubscription(user);
+  }
 }
