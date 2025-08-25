@@ -350,8 +350,6 @@ export class AuthService {
 
     if (!userFromDb) throw new NotFoundException('User not found');
 
-    console.log(userFromDb);
-
     // Stripe path: check subscriptions already in DB
     for (const customer of userFromDb.stripeCustomers ?? []) {
       const activeSub = customer.subscriptions.find(
