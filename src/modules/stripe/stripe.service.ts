@@ -7,6 +7,8 @@ import { StripeCustomersRepository } from './repositories/stripe-customers.repos
 import { StripeSubscriptionsRepository } from './repositories/stripe-subscriptions.repository';
 import { User } from '../users/entities/user.entity';
 
+// all good
+
 @Injectable()
 export class StripeService {
   private readonly logger = new Logger(StripeService.name);
