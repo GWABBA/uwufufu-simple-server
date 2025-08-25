@@ -8,6 +8,7 @@ import {
   JoinColumn,
   OneToMany,
   Index,
+  DeleteDateColumn,
 } from 'typeorm';
 import { Game } from 'src/modules/games/entities/game.entity';
 import { User } from 'src/modules/users/entities/user.entity';
@@ -16,6 +17,11 @@ import { Match } from './match.entity';
 
 @Entity('started_games')
 @Index('idx_started_games_user_created', ['user', 'createdAt'])
+@Index('idx_started_games_user_deleted_created', [
+  'user',
+  'deletedAt',
+  'createdAt',
+])
 export class StartedGame {
   @PrimaryGeneratedColumn()
   id: number;
@@ -56,4 +62,7 @@ export class StartedGame {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn({ type: 'timestamp' }) // Tracks soft delete timestamp
+  deletedAt?: Date;
 }

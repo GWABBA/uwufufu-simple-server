@@ -129,12 +129,39 @@ export class StripeService {
         const sub = event.data.object as Stripe.Subscription;
         const stripeCustomerId = sub.customer as string;
 
-        const customer =
+        // 1) Find or create customer row
+        let customer =
           (await this.customersRepo.findByStripeCustomerId(stripeCustomerId)) ??
           (await this.customersRepo.upsertByStripeCustomerId({
             stripeCustomerId,
             email: null,
           }));
+
+        // 2) Resolve app user id from metadata (set in checkout + subscription_data)
+        const metaUserIdRaw = sub.metadata?.appUserId;
+        const metaUserId =
+          metaUserIdRaw && !isNaN(Number(metaUserIdRaw))
+            ? Number(metaUserIdRaw)
+            : null;
+
+        // Optional hard fallback: check Stripe Customer metadata too
+        let resolvedUserId = customer.userId ?? metaUserId ?? null;
+        if (!resolvedUserId) {
+          try {
+            const sc = await this.stripe.customers.retrieve(stripeCustomerId);
+            const cMeta = (sc as Stripe.Customer).metadata?.appUserId;
+            if (cMeta && !isNaN(Number(cMeta))) resolvedUserId = Number(cMeta);
+          } catch {}
+        }
+
+        // 3) If we learned the app user id and the DB row lacks it, save it so future events work
+        if (resolvedUserId && !customer.userId) {
+          customer = await this.customersRepo.upsertByStripeCustomerId({
+            stripeCustomerId,
+            email: customer.email ?? null,
+            userId: resolvedUserId,
+          });
+        }
 
         const { start, end } = this.getCurrentPeriodDates(sub);
 
@@ -148,8 +175,8 @@ export class StripeService {
           currentPeriodEnd: end,
         });
 
-        // 👇 keep user tier in sync
-        await this.syncUserTier(customer.userId ?? null, sub);
+        // ✅ Use the resolved id, not possibly-null customer.userId
+        await this.syncUserTier(resolvedUserId, sub);
         break;
       }
 
@@ -165,18 +192,21 @@ export class StripeService {
       sub.current_period_start ??
       sub.current_period?.start ??
       sub.billing_cycle?.current_period?.start ??
+      sub.trial_start ??
+      sub.created ??
       null;
 
     let endUnix =
       sub.current_period_end ??
       sub.current_period?.end ??
       sub.billing_cycle?.current_period?.end ??
+      sub.trial_end ??
       null;
 
-    // Fallback: if Stripe didn't send an end, assume 30 days after start
+    // Fallback: 31 days after start
     if (!endUnix && startUnix) {
-      const THIRTY_DAYS = 30 * 24 * 60 * 60; // seconds
-      endUnix = startUnix + THIRTY_DAYS;
+      const THIRTY_ONE_DAYS = 31 * 24 * 60 * 60; // seconds
+      endUnix = startUnix + THIRTY_ONE_DAYS;
     }
 
     return {
@@ -185,12 +215,15 @@ export class StripeService {
     };
   }
 
-  /** Set users.tier & dates based on subscription status */
   private async syncUserTier(userId: number | null, sub: Stripe.Subscription) {
     if (!userId) return;
 
-    const status = sub.status; // 'active' | 'trialing' | 'canceled' | 'unpaid' | ...
+    const status = sub.status;
     const { start, end } = this.getCurrentPeriodDates(sub);
+
+    // If Stripe still gave no end, force start + 31 days (or now + 31 if no start)
+    const forcedEnd =
+      end ?? (start ? this.addDays(start, 31) : this.addDays(new Date(), 31));
 
     if (status === 'active' || status === 'trialing') {
       await this.usersRepo.update(
@@ -198,7 +231,7 @@ export class StripeService {
         {
           tier: 'plus',
           subscriptionStartDate: start ?? new Date(),
-          subscriptionEndDate: end ?? null,
+          subscriptionEndDate: forcedEnd,
         },
       );
     } else if (
@@ -211,10 +244,16 @@ export class StripeService {
         { id: userId },
         {
           tier: 'basic',
-          // keep original start; mark an end
-          subscriptionEndDate: end ?? new Date(),
+          // keep original start; mark a forced end
+          subscriptionEndDate: forcedEnd,
         },
       );
     }
+  }
+
+  private addDays(date: Date, days: number) {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d;
   }
 }

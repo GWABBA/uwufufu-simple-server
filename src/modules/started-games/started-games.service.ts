@@ -19,6 +19,7 @@ import { UserFromToken } from '../auth/types/auth-request.interface';
 import { GetStartedGamesQueryDto } from './dtos/get-started-games-query.dto';
 import { StartedGameWithGameDto } from './dtos/started-game-with-game.dto';
 import { GetStartedGameWithoutSlugParamsDto } from './dtos/get-started-game-without-slug-params.dto';
+import { StartedGame } from './entities/started-game.entity';
 
 @Injectable()
 export class StartedGamesService {
@@ -37,12 +38,11 @@ export class StartedGamesService {
     const skip = (page - 1) * perPage;
 
     const startedGames = await this.startedGamesRepository.find({
-      where: { user: { id: user.userId } },
+      where: { user: { id: user.userId }, deletedAt: IsNull() },
       order: { createdAt: 'DESC' },
       relations: ['game'],
       skip,
       take: perPage,
-      withDeleted: true,
     });
 
     return plainToInstance(StartedGameWithGameDto, startedGames, {
@@ -456,6 +456,22 @@ export class StartedGamesService {
       },
       { excludeExtraneousValues: true },
     );
+  }
+
+  async deleteStartedGame(id: number, user: UserFromToken): Promise<void> {
+    const res = await this.startedGamesRepository
+      .createQueryBuilder()
+      .update(StartedGame)
+      .set({ deletedAt: () => 'NOW()' })
+      .where('id = :id AND "userId" = :uid AND "deletedAt" IS NULL', {
+        id,
+        uid: user.userId,
+      })
+      .execute();
+
+    if (!res.affected) {
+      throw new NotFoundException('Started game not found');
+    }
   }
 
   getNextPowerOfTwo(n: number): number {

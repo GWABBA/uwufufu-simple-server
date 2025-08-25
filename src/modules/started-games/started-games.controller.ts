@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -26,9 +27,12 @@ export class StartedGamesController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async getStartedGames(@Req() req: AuthRequest, @Query() query: GetStartedGamesQueryDto ) {
+  async getStartedGames(
+    @Req() req: AuthRequest,
+    @Query() query: GetStartedGamesQueryDto,
+  ) {
     const user = req.user;
-    return await this.startedGamesService.getStartedGames(user,query);
+    return await this.startedGamesService.getStartedGames(user, query);
   }
 
   @Post()
@@ -63,8 +67,16 @@ export class StartedGamesController {
   @UseGuards(JwtAuthGuard)
   async getStartedGameById(
     @Req() req: AuthRequest,
-    @Param() params: GetStartedGameWithoutSlugParamsDto) {
+    @Param() params: GetStartedGameWithoutSlugParamsDto,
+  ) {
     const user = req.user;
     return await this.startedGamesService.getStartedGameById(params, user);
+  }
+
+  @Delete('/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteStartedGame(@Req() req: AuthRequest, @Param('id') id: number) {
+    const user = req.user;
+    return await this.startedGamesService.deleteStartedGame(id, user);
   }
 }
