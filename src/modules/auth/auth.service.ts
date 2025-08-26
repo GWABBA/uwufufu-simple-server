@@ -336,9 +336,10 @@ export class AuthService {
     return data.access_token;
   }
 
+  // auth.service.ts
   async getActiveSubscription(
     user: UserFromToken,
-  ): Promise<ActiveSubscriptionResponseDto> {
+  ): Promise<ActiveSubscriptionResponseDto | null> {
     const userFromDb = await this.usersRepository.findOne({
       where: { id: user.userId },
       relations: [
@@ -347,21 +348,20 @@ export class AuthService {
         'payments',
       ],
     });
-
     if (!userFromDb) throw new NotFoundException('User not found');
 
-    // Stripe path: check subscriptions already in DB
+    // 1) STRIPE: only truly-active (not cancel-at-period-end)
     for (const customer of userFromDb.stripeCustomers ?? []) {
-      const activeSub = customer.subscriptions.find(
-        (s) => s.status === 'active' || s.status === 'trialing',
+      const activeSub = (customer.subscriptions ?? []).find(
+        (s) => s.status === 'active' && !s.cancelAtPeriodEnd,
       );
       if (activeSub) {
         return {
           provider: 'stripe',
           subscriptionId: activeSub.stripeSubscriptionId,
           customerId: customer.stripeCustomerId,
-          status: activeSub.status,
-          cancelAtPeriodEnd: activeSub.cancelAtPeriodEnd,
+          status: activeSub.status, // 'active'
+          cancelAtPeriodEnd: activeSub.cancelAtPeriodEnd, // false here
           priceId: activeSub.priceId,
           currentPeriodStart: activeSub.currentPeriodStart,
           currentPeriodEnd: activeSub.currentPeriodEnd,
@@ -369,7 +369,7 @@ export class AuthService {
       }
     }
 
-    // PayPal path: check DB payments
+    // 2) PAYPAL fallback (treat only ACTIVE as active; if you track “cancelling”, exclude it here)
     const paypalPayment = userFromDb.payments?.find(
       (p) => p.subscriptionId && p.status?.toUpperCase() === 'ACTIVE',
     );
@@ -377,25 +377,17 @@ export class AuthService {
       return {
         provider: 'paypal',
         subscriptionId: paypalPayment.subscriptionId,
-        status: paypalPayment.status,
+        status: paypalPayment.status, // 'ACTIVE'
         customerId: null,
-        cancelAtPeriodEnd: null, // if you don’t track this in DB
+        cancelAtPeriodEnd: null, // not tracked in DB (optional to add later)
         priceId: null,
         currentPeriodStart: null,
         currentPeriodEnd: null,
       };
     }
 
-    // Default: nothing
-    return {
-      provider: null,
-      subscriptionId: null,
-      status: null,
-      cancelAtPeriodEnd: null,
-      priceId: null,
-      currentPeriodStart: null,
-      currentPeriodEnd: null,
-    };
+    // 3) Nothing found → return null (controller will send 204)
+    return null;
   }
 
   private async fetchPaypalSubscription(subId: string): Promise<any | null> {
