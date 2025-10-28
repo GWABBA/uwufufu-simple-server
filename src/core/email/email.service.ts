@@ -8,7 +8,7 @@ import { randomBytes } from 'crypto';
 @Injectable()
 export class EmailService {
   private client: postmark.ServerClient;
-  private blockDomains = ['tiscali.it'];
+  private blockDomains = ['tiscali.it', 'telenet.be'];
 
   constructor(
     private readonly configService: ConfigService,

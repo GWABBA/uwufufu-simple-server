@@ -167,6 +167,7 @@ export class GamesService {
     const checkSlugExists = async (slug: string): Promise<boolean> => {
       const existingGame = await this.gamesRepository.findOne({
         where: { slug },
+        withDeleted: true,
       });
       return !!existingGame;
     };

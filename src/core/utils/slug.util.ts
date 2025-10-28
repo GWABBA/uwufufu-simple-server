@@ -33,6 +33,5 @@ export const generateUniqueSlug = async (
     slug = `${baseSlug}-${userSlug}-${count}`;
     count++;
   }
-
   return slug;
 };
