@@ -47,6 +47,9 @@ export class GameResponseDto {
   selectionCount: number;
 
   @Expose()
+  isAdRestricted: boolean;
+
+  @Expose()
   createdAt: Date;
 
   @Expose()
