@@ -9,6 +9,11 @@ import {
   Index,
 } from 'typeorm';
 
+export enum EmailTokenPurpose {
+  CONFIRMATION = 'CONFIRMATION',
+  PASSWORD_RESET = 'PASSWORD_RESET',
+}
+
 @Entity('email_tokens')
 export class EmailToken {
   @PrimaryGeneratedColumn()
@@ -21,6 +26,14 @@ export class EmailToken {
   @Column()
   @Index()
   token: string;
+
+  @Column({
+    type: 'enum',
+    enum: EmailTokenPurpose,
+    default: EmailTokenPurpose.CONFIRMATION,
+  })
+  @Index()
+  purpose: EmailTokenPurpose;
 
   @CreateDateColumn()
   createdAt: Date; // Automatically sets timestamp when created

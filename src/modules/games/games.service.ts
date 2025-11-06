@@ -2,7 +2,11 @@ import { UserFromToken } from './../auth/types/auth-request.interface';
 import { GetGamesQueryDto } from './dtos/get-games-query.dto';
 import { UsersRepository } from './../users/users.repository';
 import { plainToInstance } from 'class-transformer';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { GamesRepository } from './games.repository';
 import {
   GetGameBySlugParamsDto,
@@ -160,7 +164,10 @@ export class GamesService {
       },
     });
     if (!user) {
-      throw new Error('User not found'); // Better to throw a custom exception
+      throw new BadRequestException('User not found'); // Better to throw a custom exception
+    }
+    if (!user.isVerified) {
+      throw new BadRequestException('Email not verified'); // Better to throw a custom exception
     }
 
     // Check if a slug already exists in the database
@@ -388,7 +395,7 @@ export class GamesService {
 
     // 🔹 Cache Invalidation
     const cacheKey = `game:${game.slug}`;
-    await this.redisService.deleteKey(cacheKey); // ✅ Delete cache after update
+    await this.redisService.deleteKeysByPattern(cacheKey); // ✅ Delete cache after update
 
     return plainToInstance(GameResponseDto, game, {
       excludeExtraneousValues: true,
@@ -435,7 +442,16 @@ export class GamesService {
 
     // 🔹 Cache Invalidation
     const cacheKey = `game:${game.slug}`;
-    await this.redisService.deleteKey(cacheKey); // ✅ Delete cache after deletion
+    await this.redisService.deleteKeysByPattern(cacheKey); // ✅ Delete cache after deletion
+
+    // if it's admin delete, delete cached list as well
+    const userFromDb = await this.usersRepository.findOne({
+      where: { id: user.userId },
+    });
+
+    if (userFromDb && userFromDb.isAdmin) {
+      await this.redisService.deleteByPattern('games:*');
+    }
 
     return { message: 'Game deleted successfully' };
   }
@@ -466,6 +482,7 @@ export class GamesService {
     game.isNsfw = !game.isNsfw;
     game.nsfwLockedByAdmin = game.isNsfw; // Lock NSFW status by admin
     await this.gamesRepository.save(game);
+    await this.redisService.deleteByPattern('games:*');
 
     return plainToInstance(
       MessageResponseDto,
