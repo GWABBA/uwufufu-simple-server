@@ -98,4 +98,14 @@ export class GamesController {
     const user = req.user;
     return this.gamesService.toggleNsfw(params, user);
   }
+
+  @Post('/:id/copy')
+  @UseGuards(JwtAuthGuard)
+  async copyGame(
+    @Req() req: AuthRequest,
+    @Param() params: GetGameParamsDto,
+  ): Promise<GameResponseDto> {
+    const user = req.user; // 1. 토큰에서 유저 정보 추출 (본인 확인 로직)
+    return this.gamesService.copyGame(params, user); // 2. 서비스로 전달
+  }
 }

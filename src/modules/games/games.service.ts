@@ -24,6 +24,9 @@ import { SelectionsRepository } from '../selections/selections.repository';
 import { RedisService } from 'src/core/redis/redis.service';
 import { UpdateGameBodyDto } from './dtos/update-game-body-dto';
 import { MessageResponseDto } from 'src/core/dtos/message-response.dto';
+import { DataSource } from 'typeorm';
+import { Game } from './entities/game.entity';
+import { Selection } from '../selections/entities/selection.entity';
 
 @Injectable()
 export class GamesService {
@@ -33,6 +36,7 @@ export class GamesService {
     private readonly categoriesRepository: CategoriesRepository,
     private readonly selectionsRepository: SelectionsRepository,
     private readonly redisService: RedisService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getGames(query: GetGamesQueryDto): Promise<GamesListResponseDto> {
@@ -493,5 +497,142 @@ export class GamesService {
         excludeExtraneousValues: true,
       },
     );
+  }
+
+  // ✅ 월드컵 복사 기능 (Category, Locale 저장 수정)
+  async copyGame(
+    params: GetGameParamsDto,
+    userFromToken: UserFromToken,
+  ): Promise<GameResponseDto> {
+    const { id } = params;
+
+    // 1. 유저 검증
+    const user = await this.usersRepository.findOne({
+      where: {
+        id: userFromToken.userId,
+      },
+    });
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    if (!user.isVerified) {
+      throw new BadRequestException('Email not verified');
+    }
+
+    // 2. 원본 게임 조회
+    // ⚠️ 여기서 relations: ['category']가 빠지면 카테고리가 복사되지 않습니다.
+    const originalGame = await this.gamesRepository.findOne({
+      where: {
+        id: Number(id),
+        user: { id: user.id },
+        deletedAt: null,
+      },
+      relations: ['category'], // ✅ 카테고리 정보 로드 필수
+    });
+
+    if (!originalGame) {
+      throw new NotFoundException(
+        'Game not found or you do not have permission to copy this game',
+      );
+    }
+
+    // 3. 트랜잭션 시작
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 4. 새로운 Slug 생성
+      const checkSlugExists = async (slug: string): Promise<boolean> => {
+        const existing = await queryRunner.manager.findOne(Game, {
+          where: { slug },
+          withDeleted: true,
+        });
+        return !!existing;
+      };
+
+      const newSlug = await generateUniqueSlug(
+        originalGame.title,
+        user.name,
+        checkSlugExists,
+      );
+
+      // 5. [수정] 새 게임 생성 (queryRunner.manager.create 사용)
+      // repository.create 대신 매니저를 직접 사용하여 트랜잭션 컨텍스트 내에서 생성
+      const newGame = queryRunner.manager.create(Game, {
+        // 기본 정보 복사
+        title: originalGame.title,
+        description: originalGame.description,
+        coverImage: originalGame.coverImage,
+        isNsfw: originalGame.isNsfw,
+        nsfwLockedByAdmin: false,
+        isAdRestricted: originalGame.isAdRestricted,
+
+        // ✅ [핵심] 카테고리와 로케일 명시적 할당
+        // originalGame.category가 객체로 로드되어 있어야 함 (relations 확인)
+        category: originalGame.category,
+        locale: originalGame.locale,
+
+        // 초기화 값
+        slug: newSlug,
+        user: user, // 소유자 설정
+        visibility: Visibility.IsClosed,
+        plays: 0,
+        finishedPlays: 0,
+      });
+
+      // 게임 저장
+      const savedGame = await queryRunner.manager.save(Game, newGame);
+
+      // 6. 선택지 복사 (원본에 선택지가 있는 경우에만 실행)
+      const originalSelections = await this.selectionsRepository.find({
+        where: { gameId: originalGame.id, deletedAt: null },
+      });
+
+      if (originalSelections.length > 0) {
+        const newSelections = originalSelections.map((selection) => {
+          return queryRunner.manager.create(Selection, {
+            // 🔹 FK ID 직접 할당 (가장 안전함)
+            gameId: savedGame.id,
+
+            // 내용 복사
+            name: selection.name,
+            isVideo: selection.isVideo,
+            videoSource: selection.videoSource,
+            videoUrl: selection.videoUrl,
+            startTime: selection.startTime,
+            endTime: selection.endTime,
+            resourceUrl: selection.resourceUrl,
+            mongoId: selection.mongoId,
+
+            // 통계 초기화
+            wins: 0,
+            losses: 0,
+            finalWins: 0,
+            finalLosses: 0,
+          });
+        });
+
+        await queryRunner.manager.save(Selection, newSelections);
+      }
+
+      await queryRunner.commitTransaction();
+
+      return plainToInstance(
+        GameResponseDto,
+        {
+          ...savedGame,
+          selectionCount: originalSelections.length,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      );
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
