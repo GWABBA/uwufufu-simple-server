@@ -86,6 +86,8 @@ export class Selection {
         ELSE "wins"::double precision / ("losses" + "wins")::double precision 
       END
     `,
+    insert: false, // <--- Add this
+    update: false,
   })
   @Index()
   winLossRatio: number;

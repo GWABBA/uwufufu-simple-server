@@ -199,9 +199,7 @@ export class StartedGamesService {
 
       // ✅ Update match with the winner
       await queryRunner.manager.query(
-        `UPDATE matches 
-          SET "winnerId" = $1 
-          WHERE "id" = $2`,
+        `UPDATE matches SET "winnerId" = $1 WHERE "id" = $2`,
         [pickedSelectionId, match.id],
       );
       const selectionsResult = await this.selectionsRepository.findBy({
@@ -232,7 +230,7 @@ export class StartedGamesService {
       winnerSelection.wins = (winnerSelection.wins || 0) + 1;
       loserSelection.losses = (loserSelection.losses || 0) + 1;
 
-      this.selectionsRepository.save([winnerSelection, loserSelection]);
+      // this.selectionsRepository.save([winnerSelection, loserSelection]);
 
       // ✅ Check if the round has ended
       const matchesCount = await this.matchesRepository.count({
@@ -246,12 +244,6 @@ export class StartedGamesService {
 
       if (currentRoundsOf === 1) {
         // ✅ Final round: update final wins/losses
-        if (winnerSelection) {
-          winnerSelection.finalWins = (winnerSelection.finalWins || 0) + 1;
-        }
-        if (loserSelection) {
-          loserSelection.finalLosses = (loserSelection.finalLosses || 0) + 1;
-        }
 
         // ✅ Mark game as completed
         startedGame.status = 'IS_COMPLETED';
@@ -275,6 +267,13 @@ export class StartedGamesService {
         await queryRunner.manager.query(
           `UPDATE games SET "finishedPlays" = "finishedPlays" + 1 WHERE "id" = $1`,
           [startedGame.gameId],
+        );
+
+        await this.updateStatsSafely(
+          queryRunner,
+          winnerSelection.id,
+          loserSelection.id,
+          true, // isFinal
         );
 
         await queryRunner.commitTransaction();
@@ -303,18 +302,20 @@ export class StartedGamesService {
       }
 
       // ✅ Remove already used selections
-      const excludedIds = (
-        await this.matchesRepository
-          .createQueryBuilder('match')
-          .select('match.selection1Id')
-          .addSelect('match.selection2Id')
-          .where('match.startedGameId = :startedGameId', { startedGameId })
-          .andWhere('match.roundsOf = :roundsOf', { roundsOf: currentRoundsOf })
-          .getRawMany()
-      ).flatMap((row) => [row.match_selection1Id, row.match_selection2Id]);
+      const excludedRows = await queryRunner.manager.query(
+        `SELECT "selection1Id", "selection2Id" FROM matches 
+         WHERE "startedGameId" = $1 AND "roundsOf" = $2`,
+        [startedGameId, currentRoundsOf],
+      );
+
+      const excludedIds = new Set();
+      excludedRows.forEach((row) => {
+        excludedIds.add(row.selection1Id);
+        excludedIds.add(row.selection2Id);
+      });
 
       const availableCandidates = candidates.filter(
-        (id) => !excludedIds.includes(id),
+        (id) => !excludedIds.has(id),
       );
 
       // ✅ Ensure we have enough candidates
@@ -339,6 +340,13 @@ export class StartedGamesService {
       });
 
       await this.matchesRepository.save(newMatch);
+      await this.updateStatsSafely(
+        queryRunner,
+        winnerSelection.id,
+        loserSelection.id,
+        false, // isFinal
+      );
+
       await queryRunner.commitTransaction();
 
       return plainToInstance(
@@ -356,6 +364,41 @@ export class StartedGamesService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  // [최종 수정] NULL 방지 처리만 하면 비율(Ratio)은 DB가 알아서 계산합니다.
+  private async updateStatsSafely(
+    queryRunner: any,
+    winnerId: number,
+    loserId: number,
+    isFinal: boolean,
+  ) {
+    const updates = [
+      { id: winnerId, isWinner: true },
+      { id: loserId, isWinner: false },
+    ].sort((a, b) => a.id - b.id);
+
+    for (const update of updates) {
+      if (update.isWinner) {
+        // wins가 NULL이면 0으로 치환 후 1 더함 -> DB가 감지하고 Ratio 자동 업데이트
+        let query = `UPDATE selections SET "wins" = COALESCE("wins", 0) + 1`;
+        if (isFinal) {
+          query += `, "finalWins" = COALESCE("finalWins", 0) + 1`;
+        }
+        query += ` WHERE "id" = $1`;
+
+        await queryRunner.manager.query(query, [update.id]);
+      } else {
+        // losses가 NULL이면 0으로 치환 후 1 더함 -> DB가 감지하고 Ratio 자동 업데이트
+        let query = `UPDATE selections SET "losses" = COALESCE("losses", 0) + 1`;
+        if (isFinal) {
+          query += `, "finalLosses" = COALESCE("finalLosses", 0) + 1`;
+        }
+        query += ` WHERE "id" = $1`;
+
+        await queryRunner.manager.query(query, [update.id]);
+      }
     }
   }
 
