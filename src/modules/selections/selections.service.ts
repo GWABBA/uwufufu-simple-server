@@ -31,10 +31,10 @@ export class SelectionsService {
     const cacheKey = `selections:worldcup:${worldcupId}:page:${page}:perPage:${perPage}`;
 
     // 🔹 Check Cache First
-    // const cachedData = await this.redisService.getValue(cacheKey);
-    // if (cachedData) {
-    //   return JSON.parse(cachedData);
-    // }
+    const cachedData = await this.redisService.getValue(cacheKey);
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
 
     const [selectionsData, total] = await Promise.all([
       this.selectionsRepository.find({
