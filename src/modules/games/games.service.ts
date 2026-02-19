@@ -233,10 +233,7 @@ export class GamesService {
 
     // 🔹 3. Get selections count
     const selectionsCount = await this.selectionsRepository.count({
-      where: {
-        game: { id: game.id },
-        deletedAt: null,
-      },
+      where: { gameId: game.id, deletedAt: null },
     });
 
     // 🔹 4. Create response DTO
