@@ -60,6 +60,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
               ? { rejectUnauthorized: true, ca: sslCert }
               : { rejectUnauthorized: false }
             : false,
+          extra: {
+            max: 50, // 🔥 커넥션 풀 크기
+            connectionTimeoutMillis: 3000, // 3초 이상 못 얻으면 에러
+            idleTimeoutMillis: 10000,
+          },
         };
       },
     }),
