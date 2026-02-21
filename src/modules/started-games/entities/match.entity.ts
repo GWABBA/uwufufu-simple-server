@@ -11,7 +11,6 @@ import { Selection } from '../../selections/entities/selection.entity';
 import { StartedGame } from './started-game.entity';
 
 @Entity('matches')
-@Index('idx_matches_sg_round_winner', ['startedGameId', 'roundsOf', 'winnerId'])
 @Index('idx_matches_startedGameId_roundsOf', ['startedGameId', 'roundsOf'])
 @Index('idx_matches_startedGameId_createdAt', ['startedGameId', 'createdAt'])
 export class Match {
