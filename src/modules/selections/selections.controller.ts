@@ -24,6 +24,7 @@ import { SelectionsListResponseDto } from './dtos/selections-list-response.dto';
 import { CreateSelectionWithVideoBodyDto } from './dtos/create-selection-with-video-body.dto';
 import { UpdateSelectionBodyDto } from './dtos/update-selection-body.dto';
 import { GetSelectionsParams } from './dtos/get-selections-params.dto';
+import * as path from 'path';
 
 @Controller('selections')
 export class SelectionsController {
@@ -73,9 +74,11 @@ export class SelectionsController {
     const user = req.user;
     const { type, worldcupId } = body;
 
+    const originalNameWithoutExt = path.parse(file.originalname).name;
+
     const uploadedFileObject = await this.s3Service.uploadFile(file, type);
     return await this.selectionsService.createSelectionWithImage(
-      uploadedFileObject.fileName,
+      originalNameWithoutExt, // ✅ DB에 넣을 이름(원본 유지)
       worldcupId,
       uploadedFileObject.url,
       user,

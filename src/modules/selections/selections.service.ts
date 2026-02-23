@@ -123,7 +123,7 @@ export class SelectionsService {
 
     try {
       const selection = this.selectionsRepository.create({
-        name: fileName.slice(0, fileName.lastIndexOf('.')),
+        name: fileName,
         game: { id: game.id },
         isVideo: false,
         resourceUrl: fileUrl,
