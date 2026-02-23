@@ -108,24 +108,25 @@ export class SelectionsService {
     );
   }
 
+  // selections.service.ts
   async createSelectionWithImage(
     fileName: string,
     worldcupId: string,
     fileUrl: string,
     userFromToken: UserFromToken,
+    isVideo: boolean,
   ) {
     const game = await this.gamesRepository.findOne({
       where: { id: Number(worldcupId), user: { id: userFromToken.userId } },
     });
-    if (!game) {
-      throw new Error('Game not found');
-    }
+
+    if (!game) throw new Error('Game not found');
 
     try {
       const selection = this.selectionsRepository.create({
         name: fileName,
         game: { id: game.id },
-        isVideo: false,
+        isVideo, // ✅ webm이면 true
         resourceUrl: fileUrl,
       });
 
@@ -133,13 +134,13 @@ export class SelectionsService {
 
       this.redisService
         .deleteKeysByPattern(`selections:worldcup:${game.id}:*`)
-        .catch((err) => {
-          console.error('[Redis] Failed to deleteKeysByPattern:', err);
-        });
+        .catch((err) =>
+          console.error('[Redis] Failed to deleteKeysByPattern:', err),
+        );
 
       return createdSelection;
     } catch (error) {
-      throw new Error(error);
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 

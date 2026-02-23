@@ -24,7 +24,11 @@ import { SelectionsListResponseDto } from './dtos/selections-list-response.dto';
 import { CreateSelectionWithVideoBodyDto } from './dtos/create-selection-with-video-body.dto';
 import { UpdateSelectionBodyDto } from './dtos/update-selection-body.dto';
 import { GetSelectionsParams } from './dtos/get-selections-params.dto';
+import { diskStorage } from 'multer';
 import * as path from 'path';
+import * as os from 'os';
+import { randomUUID } from 'crypto';
+import * as fs from 'fs/promises';
 
 @Controller('selections')
 export class SelectionsController {
@@ -51,7 +55,17 @@ export class SelectionsController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: 12 * 1024 * 1024 }, // 12 MB limit
+      storage: diskStorage({
+        destination: os.tmpdir(),
+        filename: (req, file, cb) => {
+          const safe = path
+            .basename(file.originalname)
+            .replace(/[^a-zA-Z0-9._-]/g, '');
+
+          cb(null, `${Date.now()}-${randomUUID()}-${safe}`);
+        },
+      }),
+      limits: { fileSize: 12 * 1024 * 1024 }, // 12MB
       fileFilter: (req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|gif|png|webp)$/)) {
           return callback(
@@ -68,21 +82,29 @@ export class SelectionsController {
     @Body() body: CreateSelectionWithImageDto,
     @Req() req: AuthRequest,
   ) {
-    if (!file) {
-      return { message: 'No file uploaded' };
-    }
+    if (!file) return { message: 'No file uploaded' };
+
     const user = req.user;
     const { type, worldcupId } = body;
 
     const originalNameWithoutExt = path.parse(file.originalname).name;
 
-    const uploadedFileObject = await this.s3Service.uploadFile(file, type);
-    return await this.selectionsService.createSelectionWithImage(
-      originalNameWithoutExt, // ✅ DB에 넣을 이름(원본 유지)
-      worldcupId,
-      uploadedFileObject.url,
-      user,
-    );
+    try {
+      const uploaded = await this.s3Service.uploadFileFromPath(file, type);
+
+      return await this.selectionsService.createSelectionWithImage(
+        originalNameWithoutExt, // ✅ DB에 넣을 이름(원본 유지)
+        worldcupId,
+        uploaded.url,
+        user,
+        uploaded.isVideo, // ✅ webm이면 true
+      );
+    } finally {
+      // ✅ tmp 파일 무조건 삭제 (실패해도)
+      if (file?.path) {
+        await fs.unlink(file.path).catch(() => {});
+      }
+    }
   }
 
   @Post('video')
