@@ -25,10 +25,13 @@ import { CreateSelectionWithVideoBodyDto } from './dtos/create-selection-with-vi
 import { UpdateSelectionBodyDto } from './dtos/update-selection-body.dto';
 import { GetSelectionsParams } from './dtos/get-selections-params.dto';
 import { diskStorage } from 'multer';
-import * as path from 'path';
 import * as os from 'os';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
+import {
+  getSafeDisplayNameFromOriginalName,
+  toAsciiSafeFilename,
+} from 'src/core/utils/filename.utils';
 
 @Controller('selections')
 export class SelectionsController {
@@ -58,10 +61,7 @@ export class SelectionsController {
       storage: diskStorage({
         destination: os.tmpdir(),
         filename: (req, file, cb) => {
-          const safe = path
-            .basename(file.originalname)
-            .replace(/[^a-zA-Z0-9._-]/g, '');
-
+          const safe = toAsciiSafeFilename(file.originalname);
           cb(null, `${Date.now()}-${randomUUID()}-${safe}`);
         },
       }),
@@ -87,13 +87,13 @@ export class SelectionsController {
     const user = req.user;
     const { type, worldcupId } = body;
 
-    const originalNameWithoutExt = path.parse(file.originalname).name;
+    const selectionName = getSafeDisplayNameFromOriginalName(file.originalname);
 
     try {
       const uploaded = await this.s3Service.uploadFileFromPath(file, type);
 
       return await this.selectionsService.createSelectionWithImage(
-        originalNameWithoutExt, // ✅ DB에 넣을 이름(원본 유지)
+        selectionName, // ✅ DB에 넣을 이름(원본 유지)
         worldcupId,
         uploaded.url,
         user,
