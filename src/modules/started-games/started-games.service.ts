@@ -259,12 +259,12 @@ export class StartedGamesService {
           [startedGame.gameId],
         );
 
-        await this.updateStatsSafely(
-          queryRunner,
-          pickedSelectionId,
-          loserSelectionId,
-          true,
-        );
+        // await this.updateStatsSafely(
+        //   queryRunner,
+        //   pickedSelectionId,
+        //   loserSelectionId,
+        //   true,
+        // );
 
         await queryRunner.commitTransaction();
 
@@ -330,12 +330,12 @@ export class StartedGamesService {
         }),
       );
 
-      await this.updateStatsSafely(
-        queryRunner,
-        pickedSelectionId,
-        loserSelectionId,
-        false,
-      );
+      // await this.updateStatsSafely(
+      //   queryRunner,
+      //   pickedSelectionId,
+      //   loserSelectionId,
+      //   false,
+      // );
 
       await queryRunner.commitTransaction();
 
@@ -369,39 +369,39 @@ export class StartedGamesService {
   }
 
   // [최종 수정] NULL 방지 처리만 하면 비율(Ratio)은 DB가 알아서 계산합니다.
-  private async updateStatsSafely(
-    queryRunner: any,
-    winnerId: number,
-    loserId: number,
-    isFinal: boolean,
-  ) {
-    const updates = [
-      { id: winnerId, isWinner: true },
-      { id: loserId, isWinner: false },
-    ].sort((a, b) => a.id - b.id);
+  // private async updateStatsSafely(
+  //   queryRunner: any,
+  //   winnerId: number,
+  //   loserId: number,
+  //   isFinal: boolean,
+  // ) {
+  //   const updates = [
+  //     { id: winnerId, isWinner: true },
+  //     { id: loserId, isWinner: false },
+  //   ].sort((a, b) => a.id - b.id);
 
-    for (const update of updates) {
-      if (update.isWinner) {
-        // wins가 NULL이면 0으로 치환 후 1 더함 -> DB가 감지하고 Ratio 자동 업데이트
-        let query = `UPDATE selections SET "wins" = COALESCE("wins", 0) + 1`;
-        if (isFinal) {
-          query += `, "finalWins" = COALESCE("finalWins", 0) + 1`;
-        }
-        query += ` WHERE "id" = $1`;
+  //   for (const update of updates) {
+  //     if (update.isWinner) {
+  //       // wins가 NULL이면 0으로 치환 후 1 더함 -> DB가 감지하고 Ratio 자동 업데이트
+  //       let query = `UPDATE selections SET "wins" = COALESCE("wins", 0) + 1`;
+  //       if (isFinal) {
+  //         query += `, "finalWins" = COALESCE("finalWins", 0) + 1`;
+  //       }
+  //       query += ` WHERE "id" = $1`;
 
-        await queryRunner.manager.query(query, [update.id]);
-      } else {
-        // losses가 NULL이면 0으로 치환 후 1 더함 -> DB가 감지하고 Ratio 자동 업데이트
-        let query = `UPDATE selections SET "losses" = COALESCE("losses", 0) + 1`;
-        if (isFinal) {
-          query += `, "finalLosses" = COALESCE("finalLosses", 0) + 1`;
-        }
-        query += ` WHERE "id" = $1`;
+  //       await queryRunner.manager.query(query, [update.id]);
+  //     } else {
+  //       // losses가 NULL이면 0으로 치환 후 1 더함 -> DB가 감지하고 Ratio 자동 업데이트
+  //       let query = `UPDATE selections SET "losses" = COALESCE("losses", 0) + 1`;
+  //       if (isFinal) {
+  //         query += `, "finalLosses" = COALESCE("finalLosses", 0) + 1`;
+  //       }
+  //       query += ` WHERE "id" = $1`;
 
-        await queryRunner.manager.query(query, [update.id]);
-      }
-    }
-  }
+  //       await queryRunner.manager.query(query, [update.id]);
+  //     }
+  //   }
+  // }
 
   fisherYatesShuffle(array: any[]) {
     for (let i = array.length - 1; i > 0; i--) {
