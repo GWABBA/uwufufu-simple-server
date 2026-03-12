@@ -1,5 +1,9 @@
 // s3.service.ts
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
@@ -54,6 +58,8 @@ export class S3Service {
   // ✅ (선택) 최대 픽셀 제한: 너무 큰 이미지로 서버 터지는 걸 방지
   private readonly limitInputPixels = 4096 * 4096; // 필요하면 조정
   private readonly maxResize = 2048; // 필요하면 조정 (가로/세로 최대)
+  private readonly maxInputPixelsMessage =
+    'Image dimensions are too large. Please upload a smaller image.';
 
   constructor(private readonly configService: ConfigService) {
     this.bucketName = this.configService.get<string>('r2.bucketName');
@@ -122,7 +128,9 @@ export class S3Service {
       };
     } catch (error) {
       console.error('Error uploading file:', error);
-      throw new Error('Failed to upload file');
+      throw new ServiceUnavailableException(
+        'Upload service is temporarily unavailable',
+      );
     } finally {
       // ✅ 스트림 명시적 정리 (안전성 향상)
       bodyStream.destroy();
@@ -152,10 +160,15 @@ export class S3Service {
     // --- GIF 처리 ---
     if (mime === 'image/gif') {
       // animated: true로 메타 읽으면 pages가 잡힘
-      const meta = await sharpFn(inputPath, {
-        animated: true,
-        limitInputPixels: this.limitInputPixels,
-      }).metadata();
+      let meta;
+      try {
+        meta = await sharpFn(inputPath, {
+          animated: true,
+          limitInputPixels: this.limitInputPixels,
+        }).metadata();
+      } catch (error) {
+        this.rethrowFriendlyImageError(error);
+      }
 
       const isAnimated = (meta.pages ?? 1) > 1;
 
@@ -179,18 +192,22 @@ export class S3Service {
             `upload-${Date.now()}-${rand}.webp`,
           );
 
-          await sharpFn(inputPath, {
-            animated: true,
-            limitInputPixels: this.limitInputPixels,
-          })
-            .resize({
-              width: this.maxResize,
-              height: this.maxResize,
-              fit: 'inside',
-              withoutEnlargement: true,
+          try {
+            await sharpFn(inputPath, {
+              animated: true,
+              limitInputPixels: this.limitInputPixels,
             })
-            .webp({ quality: 80 })
-            .toFile(webpOut);
+              .resize({
+                width: this.maxResize,
+                height: this.maxResize,
+                fit: 'inside',
+                withoutEnlargement: true,
+              })
+              .webp({ quality: 80 })
+              .toFile(webpOut);
+          } catch (error) {
+            this.rethrowFriendlyImageError(error);
+          }
 
           return {
             outPath: webpOut,
@@ -204,15 +221,19 @@ export class S3Service {
       // 정적 GIF -> WebP (파일로)
       const webpOut = path.join(tmpDir, `upload-${Date.now()}-${rand}.webp`);
 
-      await sharpFn(inputPath, { limitInputPixels: this.limitInputPixels })
-        .resize({
-          width: this.maxResize,
-          height: this.maxResize,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .webp({ quality: 80 })
-        .toFile(webpOut);
+      try {
+        await sharpFn(inputPath, { limitInputPixels: this.limitInputPixels })
+          .resize({
+            width: this.maxResize,
+            height: this.maxResize,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({ quality: 80 })
+          .toFile(webpOut);
+      } catch (error) {
+        this.rethrowFriendlyImageError(error);
+      }
 
       return {
         outPath: webpOut,
@@ -225,18 +246,22 @@ export class S3Service {
     // --- jpg/jpeg/png/webp -> webp (파일로) ---
     const webpOut = path.join(tmpDir, `upload-${Date.now()}-${rand}.webp`);
 
-    await sharpFn(inputPath, {
-      animated: true, // webp 애니 입력이 들어올 수도 있어서
-      limitInputPixels: this.limitInputPixels,
-    })
-      .resize({
-        width: this.maxResize,
-        height: this.maxResize,
-        fit: 'inside',
-        withoutEnlargement: true,
+    try {
+      await sharpFn(inputPath, {
+        animated: true, // webp 애니 입력이 들어올 수도 있어서
+        limitInputPixels: this.limitInputPixels,
       })
-      .webp({ quality: 80 })
-      .toFile(webpOut);
+        .resize({
+          width: this.maxResize,
+          height: this.maxResize,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 80 })
+        .toFile(webpOut);
+    } catch (error) {
+      this.rethrowFriendlyImageError(error);
+    }
 
     return {
       outPath: webpOut,
@@ -244,6 +269,21 @@ export class S3Service {
       ext: 'webp',
       isVideo: false,
     };
+  }
+
+  private rethrowFriendlyImageError(error: unknown): never {
+    if (error instanceof BadRequestException) {
+      throw error;
+    }
+
+    const message =
+      error instanceof Error ? error.message.toLowerCase() : String(error);
+
+    if (message.includes('input image exceeds pixel limit')) {
+      throw new BadRequestException(this.maxInputPixelsMessage);
+    }
+
+    throw error instanceof Error ? error : new Error(String(error));
   }
 
   private async gifPathToWebmFile(

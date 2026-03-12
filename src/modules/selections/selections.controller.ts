@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   Req,
+  ServiceUnavailableException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -82,7 +83,9 @@ export class SelectionsController {
     @Body() body: CreateSelectionWithImageDto,
     @Req() req: AuthRequest,
   ) {
-    if (!file) return { message: 'No file uploaded' };
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
 
     const user = req.user;
     const { type, worldcupId } = body;
@@ -98,6 +101,18 @@ export class SelectionsController {
         uploaded.url,
         user,
         uploaded.isVideo, // ✅ webm이면 true
+      );
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
+
+      throw new ServiceUnavailableException(
+        'Upload service is temporarily unavailable',
       );
     } finally {
       // ✅ tmp 파일 무조건 삭제 (실패해도)

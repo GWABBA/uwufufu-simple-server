@@ -1,5 +1,10 @@
-import { Optional } from '@nestjs/common';
-import { IsNotEmpty, IsNumber, IsPositive, IsString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 
 export class UpdateSelectionBodyDto {
   @IsNumber()
@@ -15,18 +20,18 @@ export class UpdateSelectionBodyDto {
   name: string;
 
   @IsString()
-  @Optional()
+  @IsOptional()
   resourceUrl: string;
 
   @IsString()
-  @Optional()
+  @IsOptional()
   videoUrl: string;
 
   @IsNumber()
-  @Optional()
+  @IsOptional()
   startTime: number;
 
   @IsNumber()
-  @Optional()
+  @IsOptional()
   endTime: number;
 }
